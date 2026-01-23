@@ -1,0 +1,76 @@
+# Ignore compiled files
+*.log
+/build/
+
+# Ignore Node modules
+node_modules/
+
+# Ignore IDE specific files
+.idea/
+.vscode/
+
+# Ignore environment files
+.env
+
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore compiled Java files
+*.class
+
+# Ignore compiled C/C++ files
+*.o
+*.out
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+
+# Ignore compiled Go files
+*.exe
+*.dll
+*.so
+
+# Ignore compiled Rust files
+target/
+*.rlib
+
+# Ignore compiled JavaScript files
+dist/
+*.min.js
+*.min.css
+
+# Ignore compiled TypeScript files
+*.js
+*.d.ts
+
+# Ignore compiled Swift files
+*.swiftmodule
+
+# Ignore compiled Kotlin files
+*.jar
+*.class
+
+# Ignore compiled Dart files
+*.dart_tool/
+*.flutter-plugins
+*.flutter-plugins-dependencies
+
+# Ignore compiled Flutter files
+*.flutter-plugins-dependencies
+*.flutter-plugins
+
+# Ignore compiled React Native files
+android/app/build/
+ios/build/
+
+# Ignore compiled Android files
+android/app/build/
+
+# Ignore compiled iOS files
+ios/build/
+
