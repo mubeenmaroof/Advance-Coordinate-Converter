@@ -742,7 +742,13 @@
                     <h4 style="margin-bottom: 15px;">🗺️ Map Layers</h4>
                     <p style="margin: 0 0 15px 0; font-size: 0.95em; color: #666;">Click to switch between different map views:</p>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px;">
-                        <button class="marker-style-btn active" onclick="changeMapLayer('openstreetmap')" data-layer="openstreetmap" style="border: 2px solid #667eea;">
+                        <button class="marker-style-btn active" onclick="changeMapLayer('google')" data-layer="google" style="border: 2px solid #667eea;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
+                                <span style="font-size: 24px;">🌍</span>
+                                <span>Google Maps</span>
+                            </div>
+                        </button>
+                        <button class="marker-style-btn " onclick="changeMapLayer('openstreetmap')" data-layer="openstreetmap" >
                             <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
                                 <span style="font-size: 24px;">🌐</span>
                                 <span>Street Map</span>
@@ -764,12 +770,6 @@
                             <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
                                 <span style="font-size: 24px;">🌙</span>
                                 <span>Dark Mode</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMapLayer('topo')" data-layer="topo">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
-                                <span style="font-size: 24px;">🗺️</span>
-                                <span>Topographic</span>
                             </div>
                         </button>
                         <button class="marker-style-btn" onclick="changeMapLayer('esri')" data-layer="esri">
@@ -2457,12 +2457,13 @@
                     tileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
                     attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
                     break;
-                    
-                case 'topo':
-                    // Topographic
-                    tileUrl = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
-                    attribution = 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap';
+
+                case 'google':
+                    // Google Maps (via Google Maps API)
+                    tileUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+                    attribution = '© Google Maps';
                     break;
+                       
                     
                 case 'esri':
                     // ESRI World Street Map
