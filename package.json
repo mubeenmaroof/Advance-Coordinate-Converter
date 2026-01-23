@@ -1,0 +1,17 @@
+{
+  "name": "advanced-coordinate-converter",
+  "version": "1.0.0",
+  "description": "Coordinate Conversion Tool",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-packager . CoordinateConverter --platform=win32 --arch=x64 --out=dist --overwrite"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-packager": "^17.1.2"
+  }
+}
