@@ -1,0 +1,80 @@
+{
+  "appModelId": "com.todesktop.260211co14nunk5",
+  "appProtocol": {
+    "enabled": false,
+    "value": ""
+  },
+  "autoUpdates": {
+    "autoCheckIntervalMins": 0,
+    "autoUpdater": true,
+    "shouldAutoCheckInterval": false,
+    "shouldAutoCheckOnLaunch": true,
+    "updateReadyAction": {
+      "showInstallAndRestartPrompt": {
+        "mode": "never",
+        "options": {
+          "detail": "",
+          "installOnNextLaunchButton": "",
+          "message": "",
+          "restartAndInstallButton": ""
+        }
+      },
+      "showNotification": {
+        "mode": "always",
+        "options": {
+          "body": "",
+          "title": ""
+        }
+      }
+    }
+  },
+  "disableDevTools": false,
+  "fileAssetDetailsList": [
+    {
+      "md5Hash": "BrlQ7EtitMdH7IUqVauCUg==",
+      "name": "index.html",
+      "relativeLocalPath": "files/index.html",
+      "type": "file",
+      "url": "https://firebasestorage.googleapis.com/v0/b/todesktop-prod1.appspot.com/o/260211co14nunk5%2Ffiles%2Findex.html?alt=media&token=e308e1fb-deba-4525-800d-fe18a64b0a05"
+    }
+  ],
+  "googleOAuthIsExternal": false,
+  "icon": "https://download.todesktop.com/default-icons/blank-icon.png",
+  "id": "260211co14nunk5",
+  "insecure": false,
+  "internalUrls": {
+    "enabled": false,
+    "value": ""
+  },
+  "lastUsedDesktopifyVersion": "6.27.0",
+  "menus": [
+    {
+      "id": "aS0GKsqLNOCDB-59OYYmp",
+      "label": "New Menu",
+      "platforms": [
+        "win32"
+      ],
+      "role": "",
+      "submenu": []
+    }
+  ],
+  "name": "AdvanceCoordinateConverter",
+  "offlineScreen": {
+    "buttonBackgroundColor": "#FAFAFA",
+    "buttonTextColor": "#111827",
+    "enabled": true
+  },
+  "plugins": [],
+  "shouldAlwaysDisplayDockIcon": true,
+  "shouldLaunchAtStartupByDefault": true,
+  "shouldMinimizeToTray": true,
+  "shouldOnlyAllowVerifiedProtocols": true,
+  "singleInstance": false,
+  "trays": [],
+  "useSeparateIcons": false,
+  "userAgent": {
+    "enabled": false,
+    "value": ""
+  },
+  "windows": []
+}

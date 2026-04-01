@@ -1,17 +1,45 @@
 {
   "name": "advanced-coordinate-converter",
   "version": "1.0.0",
-  "description": "Coordinate Conversion Tool",
+  "description": "Advance Coordinate Conversion Tool",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-packager . CoordinateConverter --platform=win32 --arch=x64 --out=dist --overwrite"
+    "build:win": "electron-packager . CoordinateConverter --platform=win32 --arch=x64 --out=dist --overwrite --asar",
+    "build:single": "npm run build:win && powershell -Command \"Compress-Archive -Path 'dist/CoordinateConverter-win32-x64/*' -DestinationPath 'app.zip' -Force\" && C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /target:winexe /out:CoordinateConverter_Single.exe /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /resource:app.zip,app.zip Packer.cs && powershell -Command 'rm app.zip'",
+    "build:encrypted": "node build-protected.js",
+    "dist": "electron-builder"
+  },
+  "author": "Mubeen Maroof",
+  "license": "MIT",
+  "build": {
+    "appId": "com.coordinate.converter",
+    "productName": "AdvanceCoordinateConverter",
+    "win": {
+      "target": "zip"
+    },
+    "portable": {
+      "artifactName": "AdvanceCoordinateConverter_Portable.exe",
+      "unpackDirName": "AdvanceCoordinateConverter"
+    },
+    "compression": "store",
+    "directories": {
+      "output": "dist"
+    },
+    "extraMetadata": {
+      "main": "main.js"
+    }
   },
   "keywords": [],
-  "author": "",
-  "license": "MIT",
   "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "bytenode": "^1.5.7",
     "electron": "^28.3.3",
-    "electron-packager": "^17.1.2"
+    "electron-builder": "^26.7.0",
+    "electron-packager": "^17.1.2",
+    "fs-extra": "^11.3.4",
+    "javascript-obfuscator": "^5.3.0"
   }
 }
