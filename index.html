@@ -135,6 +135,10 @@
                         onchange="handleFileUpload(event)">
                 </div>
 
+                <div class="button-group" style="margin-top: 15px; display: none;" id="excelClearBtnGroup">
+                    <button class="btn btn-secondary" onclick="clearExcelData()">Clear</button>
+                </div>
+
                 <div id="columnSelection"></div>
                 <div id="excelResult"></div>
             </div>
@@ -532,6 +536,59 @@
                     </div>
 
                     <div id="sanitizeColumnSelection" style="margin-top: 20px;"></div>
+
+                    <div id="sanitizeOptions"
+                        style="margin-top: 20px; background: #fce4ec; border: 1px solid #f8bbd0; padding: 15px; border-radius: 8px;">
+                        <label style="font-weight: 600; margin-bottom: 15px; display: block; color: #c2185b;">Select
+                            Items to Remove:</label>
+                        <div
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="sanitizeOptAll" onchange="toggleAllSanitizeOptions(this)">
+                                <strong>Select All</strong>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" class="sanitize-opt" value="alpha">
+                                <span>Characters (A-Z)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" class="sanitize-opt" value="spaces">
+                                <span>Spaces</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" class="sanitize-opt" value="symbols">
+                                <span>Symbols</span>
+                            </label>
+                        </div>
+
+                        <div style="height: 1px; background: #f8bbd0; margin: 10px 0;"></div>
+                        <label
+                            style="font-weight: 600; margin-bottom: 10px; display: block; color: #c2185b; font-size: 0.9em;">Specific
+                            Delimiters:</label>
+                        <div
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" class="sanitize-opt sanitize-delim-all" id="sanitizeOptAllDelims"
+                                    value="all_delims" onchange="handleAllDelimsChange(this)">
+                                <strong>All Delimiters</strong>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" class="sanitize-opt sanitize-delim-single" value="comma"
+                                    onchange="handleSingleDelimChange()">
+                                <span>Comma (,)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" class="sanitize-opt sanitize-delim-single" value="semicolon"
+                                    onchange="handleSingleDelimChange()">
+                                <span>Semicolon (;)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" class="sanitize-opt sanitize-delim-single" value="colon"
+                                    onchange="handleSingleDelimChange()">
+                                <span>Colon (:)</span>
+                            </label>
+                        </div>
+                    </div>
 
                     <div class="button-group" style="margin-top: 20px;">
                         <button class="btn" style="background: #e91e63; color: white; border: none;"
