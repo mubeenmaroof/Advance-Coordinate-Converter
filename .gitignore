@@ -44,9 +44,6 @@ dist/
 *.min.js
 *.min.css
 
-# Ignore compiled TypeScript files
-*.js
-*.d.ts
 
 # Ignore compiled Swift files
 *.swiftmodule
