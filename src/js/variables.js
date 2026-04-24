@@ -109,5 +109,9 @@ let geoJsonCoordinateStore = [];
 let currentKmlData = null;
 let kmlCoordinateStore = [];
 
+// Shapefile Variables
+let currentShpData = null;
+let shpCoordinateStore = [];
+
 
 // the following DOM listeners are moved to their respective modules (dedupe/split/comparison etc)

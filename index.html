@@ -128,51 +128,81 @@
 
             <!-- File Upload Tab -->
             <div id="excel" class="tab-content">
-                <div class="drag-drop-zone" id="dropZone" onclick="document.getElementById('excelFile').click()">
-                    <h3>📤 Drag & Drop Excel/CSV File Here</h3>
-                    <p>Or click to browse</p>
-                    <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none"
-                        onchange="handleFileUpload(event)">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(45%, 1fr)); gap: 25px; align-items: start;">
+                    
+                    <!-- Excel/CSV Upload -->
+                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="dropZone" onclick="document.getElementById('excelFile').click()">
+                            <h3>📤 Drag & Drop Excel/CSV File</h3>
+                            <p>Or click to browse</p>
+                            <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none"
+                                onchange="handleFileUpload(event)">
+                        </div>
+                        <div class="button-group" style="margin-top: 15px; display: none;" id="excelClearBtnGroup">
+                            <button class="btn btn-secondary" onclick="clearExcelData()">Clear</button>
+                        </div>
+                        <div id="columnSelection"></div>
+                        <div id="excelResult"></div>
+                    </div>
+
+                    <!-- GeoJSON/JSON Upload -->
+                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="geoJsonDropZone" onclick="document.getElementById('geoJsonFile').click()">
+                            <h3>🗺️ Drag & Drop GeoJSON/JSON File</h3>
+                            <p>Or click to browse</p>
+                            <input type="file" id="geoJsonFile" accept=".geojson,.json" style="display:none"
+                                onchange="handleGeoJsonUpload(event)">
+                        </div>
+                        <div class="button-group" style="margin-top: 15px; display: none;" id="geoJsonClearBtnGroup">
+                            <button class="btn btn-secondary" onclick="clearGeoJsonData()">Clear</button>
+                        </div>
+                        <div id="geoJsonResult"></div>
+                    </div>
+
+                    <!-- KMZ/KML Upload -->
+                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="kmlDropZone" onclick="document.getElementById('kmlFile').click()">
+                            <h3>📂 Drag & Drop KMZ/KML File</h3>
+                            <p>Or click to browse</p>
+                            <input type="file" id="kmlFile" accept=".kml,.kmz" style="display:none"
+                                onchange="handleKmlUpload(event)">
+                        </div>
+                        <div class="button-group" style="margin-top: 15px; display: none;" id="kmlClearBtnGroup">
+                            <button class="btn btn-secondary" onclick="clearKmlData()">Clear</button>
+                        </div>
+                        <div id="kmlResult"></div>
+                    </div>
+
+                    <!-- Shapefile Upload -->
+                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="shpDropZone" onclick="document.getElementById('shpFile').click()">
+                            <h3>📦 Drag & Drop Shapefile Components</h3>
+                            <p>Select all: <strong>.shp, .dbf, .shx, .prj</strong></p>
+                            <input type="file" id="shpFile" accept=".shp,.dbf,.shx,.prj" style="display:none"
+                                multiple onchange="handleShpUpload(event)">
+                        </div>
+                        <div class="button-group" style="margin-top: 15px; display: none;" id="shpClearBtnGroup">
+                            <button class="btn btn-secondary" onclick="clearShpData()">Clear</button>
+                        </div>
+                        <div id="shpResult"></div>
+                    </div>
+
+                    <!-- GPX Upload -->
+                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="gpxDropZone" onclick="document.getElementById('gpxFile').click()">
+                            <h3>🛰️ Drag & Drop GPX File</h3>
+                            <p>Waypoints, Tracks & Routes</p>
+                            <input type="file" id="gpxFile" accept=".gpx" style="display:none"
+                                onchange="handleGpxUpload(event)">
+                        </div>
+                        <div class="button-group" style="margin-top: 15px; display: none;" id="gpxClearBtnGroup">
+                            <button class="btn btn-secondary" onclick="clearGpxData()">Clear</button>
+                        </div>
+                        <div id="gpxResult"></div>
+                    </div>
+
+
                 </div>
-
-                <div class="button-group" style="margin-top: 15px; display: none;" id="excelClearBtnGroup">
-                    <button class="btn btn-secondary" onclick="clearExcelData()">Clear</button>
-                </div>
-
-                <div id="columnSelection"></div>
-                <div id="excelResult"></div>
-
-                <!-- GeoJSON/JSON Upload Section -->
-                <hr style="margin-top: 30px; margin-bottom: 30px; border: none; border-top: 2px solid #ddd;">
-
-                <div class="drag-drop-zone" id="geoJsonDropZone" onclick="document.getElementById('geoJsonFile').click()" style="margin-top: 20px;">
-                    <h3>🗺️ Drag & Drop GeoJSON/JSON File Here</h3>
-                    <p>Or click to browse</p>
-                    <input type="file" id="geoJsonFile" accept=".geojson,.json" style="display:none"
-                        onchange="handleGeoJsonUpload(event)">
-                </div>
-
-                <div class="button-group" style="margin-top: 15px; display: none;" id="geoJsonClearBtnGroup">
-                    <button class="btn btn-secondary" onclick="clearGeoJsonData()">Clear</button>
-                </div>
-
-                <div id="geoJsonResult"></div>
-
-                <!-- KMZ/KML Upload Section -->
-                <hr style="margin-top: 30px; margin-bottom: 30px; border: none; border-top: 2px solid #ddd;">
-
-                <div class="drag-drop-zone" id="kmlDropZone" onclick="document.getElementById('kmlFile').click()" style="margin-top: 20px;">
-                    <h3>📂 Drag & Drop KMZ/KML File Here</h3>
-                    <p>Or click to browse</p>
-                    <input type="file" id="kmlFile" accept=".kml,.kmz" style="display:none"
-                        onchange="handleKmlUpload(event)">
-                </div>
-
-                <div class="button-group" style="margin-top: 15px; display: none;" id="kmlClearBtnGroup">
-                    <button class="btn btn-secondary" onclick="clearKmlData()">Clear</button>
-                </div>
-
-                <div id="kmlResult"></div>
             </div>
 
             <!-- Map View Tab -->
@@ -738,6 +768,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/@mapbox/shp-write@latest/shpwrite.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.2/shp.min.js"></script>
 
     <!-- Modularized component scripts -->
     <script src="src/js/variables.js"></script>
@@ -750,6 +781,8 @@
     <script src="src/js/excel.js"></script>
     <script src="src/js/geojson.js"></script>
     <script src="src/js/kml.js"></script>
+    <script src="src/js/shp.js"></script>
+    <script src="src/js/gpx.js"></script>
     <script src="src/js/app.js"></script>
 
     <!-- Welcome Modal -->

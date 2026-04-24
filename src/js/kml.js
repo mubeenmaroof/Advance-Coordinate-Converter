@@ -3,9 +3,9 @@
 function handleKmlUpload(event) {
   console.log("📁 KML file upload triggered", event);
   const file = event.target.files[0];
-  
+
   if (!file) return;
-  
+
   if (validateFileSize(file)) {
     const clearBtnRow = document.getElementById("kmlClearBtnGroup");
     if (clearBtnRow) clearBtnRow.style.display = "block";
@@ -15,7 +15,7 @@ function handleKmlUpload(event) {
 
 async function handleKmlFile(file) {
   const isKmz = file.name.toLowerCase().endsWith('.kmz');
-  
+
   if (isKmz) {
     handleKmzFile(file);
   } else {
@@ -36,12 +36,12 @@ async function handleKmzFile(file) {
     showProcessingOverlay("Extracting KMZ Archive...");
     const zip = await JSZip.loadAsync(file);
     const kmlFile = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith('.kml'));
-    
+
     if (!kmlFile) {
       hideProcessingOverlay();
       throw new Error("No KML file found inside KMZ archive.");
     }
-    
+
     const kmlContent = await kmlFile.async("string");
     processKmlData(kmlContent, file.name);
     hideProcessingOverlay();
@@ -55,21 +55,21 @@ async function handleKmzFile(file) {
 
 function processKmlData(kmlString, fileName) {
   const resultDiv = document.getElementById("kmlResult");
-  
+
   try {
     const parser = new DOMParser();
     const kmlDom = parser.parseFromString(kmlString, 'text/xml');
-    
+
     // Check for parsing errors
     const errorNode = kmlDom.querySelector('parsererror');
     if (errorNode) {
       throw new Error("Invalid KML format.");
     }
-    
+
     const geoJsonData = toGeoJSON.kml(kmlDom);
     currentKmlData = geoJsonData;
     kmlCoordinateStore = extractCoordinatesFromKmlGeoJson(geoJsonData);
-    
+
     if (kmlCoordinateStore.length > 0) {
       renderKmlSuccessUI(fileName, kmlCoordinateStore.length);
     } else {
@@ -85,7 +85,7 @@ function processKmlData(kmlString, fileName) {
 function extractCoordinatesFromKmlGeoJson(geoJson) {
   const coordinates = [];
   let globalIndex = 0;
-  
+
   if (geoJson.type === "FeatureCollection") {
     geoJson.features.forEach((feature, featureIndex) => {
       const extracted = extractCoordinatesFromKmlFeature(feature, featureIndex, globalIndex);
@@ -95,7 +95,7 @@ function extractCoordinatesFromKmlGeoJson(geoJson) {
   } else if (geoJson.type === "Feature") {
     coordinates.push(...extractCoordinatesFromKmlFeature(geoJson, 0, 0));
   }
-  
+
   return coordinates;
 }
 
@@ -103,16 +103,16 @@ function extractCoordinatesFromKmlFeature(feature, featureIndex, globalStartInde
   const coordinates = [];
   const geometry = feature.geometry;
   const properties = feature.properties || {};
-  
+
   if (!geometry) return coordinates;
-  
+
   const coords = extractKmlCoordsFromGeometry(geometry);
   coords.forEach((coord, idx) => {
     const propsWithId = { ...properties };
     if (!propsWithId['ObjectID']) {
       propsWithId['ObjectID'] = globalStartIndex + idx + 1;
     }
-    
+
     coordinates.push({
       lat: coord[1],
       lng: coord[0],
@@ -122,7 +122,7 @@ function extractCoordinatesFromKmlFeature(feature, featureIndex, globalStartInde
       geometryType: geometry.type
     });
   });
-  
+
   return coordinates;
 }
 
@@ -154,11 +154,11 @@ function renderKmlSuccessUI(fileName, count) {
   const resultDiv = document.getElementById("kmlResult");
   const isKmz = fileName.toLowerCase().endsWith('.kmz');
   const format = isKmz ? "KMZ (Compressed KML)" : "KML";
-  
+
   // Discover all unique property keys and geometry types
   const propertyKeys = new Set();
   const geomTypes = new Set();
-  
+
   kmlCoordinateStore.forEach(c => {
     if (c.properties) {
       Object.keys(c.properties).forEach(key => {
@@ -167,10 +167,10 @@ function renderKmlSuccessUI(fileName, count) {
     }
     if (c.geometryType) geomTypes.add(c.geometryType);
   });
-  
+
   const sortedKeys = Array.from(propertyKeys).sort();
-  const displayCount = Math.min(count, 500);
-  
+  const displayCount = Math.min(count, 10);
+
   let html = `<div class="result">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
       <div>
@@ -211,7 +211,7 @@ function renderKmlSuccessUI(fileName, count) {
       <button class="btn btn-success" onclick="showKmlOnMap()" style="padding: 10px 20px; font-weight: 700; flex: 1;">🗺️ Show on Map</button>
     </div>
   </div>`;
-  
+
   resultDiv.innerHTML = html;
 }
 
@@ -220,28 +220,28 @@ function showKmlOnMap() {
     alert("No coordinates found.");
     return;
   }
-  
+
   // Switch to Map Tab
   document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.remove("active"));
   document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
-  
+
   const mapTab = document.getElementById("map");
   const mapBtn = document.querySelectorAll(".tab-btn")[3]; // Map tab is the 4th button (index 3)
   mapTab.classList.add("active");
   mapBtn.classList.add("active");
   window.scrollTo({ top: 0, behavior: "smooth" });
-  
+
   setTimeout(() => {
     if (typeof initMap === 'function' && !map) {
       initMap();
     } else if (map) {
       map.invalidateSize();
     }
-    
+
     if (typeof clearMapMarkers === 'function') {
       clearMapMarkers();
     }
-    
+
     // Add GeoJSON layer from KML
     if (currentKmlData) {
       L.geoJSON(currentKmlData, {
@@ -250,7 +250,7 @@ function showKmlOnMap() {
             const props = { ...feature.properties };
             if (feature.geometry.type.includes("Polygon")) props.TYPE = "Polygon";
             else if (feature.geometry.type.includes("Line")) props.TYPE = "Line";
-            
+
             const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' });
           }
@@ -267,11 +267,11 @@ function showKmlOnMap() {
         }
       }).addTo(map);
     }
-    
+
     // Add individual markers from the coordinate store
     const totalPoints = kmlCoordinateStore.length;
     const skipVertexMarkers = totalPoints > 500;
-    
+
     kmlCoordinateStore.forEach((coord) => {
       if (Math.abs(coord.lat) <= 90 && Math.abs(coord.lng) <= 180) {
         if (typeof addDetailedMarker === 'function') {
@@ -282,7 +282,7 @@ function showKmlOnMap() {
         }
       }
     });
-    
+
     if (markers.length > 0) {
       setTimeout(() => {
         const group = L.featureGroup(markers);
@@ -297,7 +297,7 @@ function showKmlOnMap() {
         if (bounds.isValid()) map.fitBounds(bounds.pad(0.1));
       }
     }
-    
+
     if (typeof updateMapStats === 'function') {
       updateMapStats();
     }

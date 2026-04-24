@@ -3,14 +3,14 @@
 function handleFileUpload(event) {
   console.log("📁 Excel file upload triggered", event);
   const file = event.target.files[0];
-  
+
   if (!file) {
     console.error("❌ No file selected");
     return;
   }
-  
+
   console.log("📄 File selected:", file.name, "Size:", file.size, "Type:", file.type);
-  
+
   if (validateFileSize(file)) {
     console.log("✅ File size validated");
     const clearBtnRow = document.getElementById("excelClearBtnGroup");
@@ -64,14 +64,14 @@ function handleFile(file) {
         `<div class="error">Error reading file: ${error.message}</div>`;
     }
   };
-  
-  reader.onerror = function(error) {
+
+  reader.onerror = function (error) {
     console.error("❌ FileReader error:", error);
     hideProcessingOverlay();
     document.getElementById("excelResult").innerHTML =
       `<div class="error">Error reading file: File read error</div>`;
   };
-  
+
   showProcessingOverlay("Reading File...");
   if (file.name.endsWith(".csv")) {
     reader.readAsText(file);
@@ -306,22 +306,39 @@ function convertExcelData() {
 
 function displayConvertedData(data, convertedColumns) {
   const resultDiv = document.getElementById("excelResult");
-  let html = '<div class="result">';
-  html += "<h3>✅ Conversion Complete</h3>";
-  html += `<p>Converted ${convertedColumns.length} column(s) in ${data.length - 1} row(s)</p>`;
-  html += `<p><strong>Coordinates found: ${coordinateDataStore.length}</strong></p>`;
-  html += "</div>";
-  html += '<div class="table-container">';
-  html += "<table><thead><tr>";
+  let html = `
+    <div class="result-card" style="animation: fadeIn 0.5s ease-out;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h3 style="margin: 0; color: #667eea; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.2em;">✅</span> Conversion Complete
+          </h3>
+          <p style="margin: 5px 0 0 0; color: #64748b; font-size: 0.9em;">
+            Converted ${convertedColumns.length} column(s) in ${data.length - 1} row(s)
+          </p>
+        </div>
+        <div style="background: rgba(102, 126, 234, 0.1); color: #667eea; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 0.9em;">
+          📍 ${coordinateDataStore.length} Coordinates Found
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+  `;
+
   data[0].forEach((header, index) => {
     const isConverted = convertedColumns.includes(index);
     const badge = isConverted
-      ? '<span class="badge badge-warning">Converted</span>'
+      ? '<span class="badge" style="background: #fff3cd; color: #856404; font-size: 10px; margin-left: 5px;">Converted</span>'
       : "";
     html += `<th>${header || `Column ${index + 1}`}${badge}</th>`;
   });
+
   html += "</tr></thead><tbody>";
-  const displayRows = Math.min(50, data.length - 1);
+  
+  const displayRows = Math.min(10, data.length - 1);
   for (let i = 1; i <= displayRows; i++) {
     html += "<tr>";
     data[i].forEach((cell) => {
@@ -329,10 +346,29 @@ function displayConvertedData(data, convertedColumns) {
     });
     html += "</tr>";
   }
-  if (data.length > 51) {
-    html += `<tr><td colspan="${data[0].length}" style="text-align: center; font-style: italic;">... and ${data.length - 51} more rows</td></tr>`;
+
+  if (data.length > 11) {
+    html += `
+      <tr>
+        <td colspan="${data[0].length}" style="text-align: center; padding: 20px; color: #94a3b8; background: #f8fafc; font-style: italic;">
+          ... and ${data.length - 11} more rows in dataset
+        </td>
+      </tr>`;
   }
-  html += "</tbody></table></div>";
+
+  html += `
+          </tbody>
+        </table>
+      </div>
+      
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+         <button class="btn btn-primary" onclick="showExcelOnMap()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;">
+           <span>🗺️</span> View on Map
+         </button>
+      </div>
+    </div>
+  `;
+
   resultDiv.innerHTML = html;
   window.convertedExcelData = data;
 }

@@ -148,6 +148,29 @@ function setupDragDrop() {
       }
     });
   }
+
+  // SHP Drop Zone Setup
+  const shpDropZone = document.getElementById("shpDropZone");
+
+  if (shpDropZone) {
+    shpDropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      shpDropZone.classList.add("dragover");
+    });
+
+    shpDropZone.addEventListener("dragleave", () => {
+      shpDropZone.classList.remove("dragover");
+    });
+
+    shpDropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      shpDropZone.classList.remove("dragover");
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleShpFiles(files);
+      }
+    });
+  }
 }
 
 function generateExportFileName(fileInputIds, toolName, extension) {
