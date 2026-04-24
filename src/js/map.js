@@ -1042,6 +1042,7 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
                 <button title="Export as GeoJSON" onclick="exportToGeoJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">🌍 GeoJSON</button>
                 <button title="Export as JSON" onclick="exportToJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📄 JSON</button>
                 <button title="Export as KML" onclick="exportToKML()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📍 KML</button>
+                <button title="Export as SHP" onclick="exportToShp()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📦 SHP</button>
                 <button title="Minimize/Maximize" id="btnMinimizeSelection" onclick="toggleMinimizeSelection()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">−</button>
                 <button title="Close panel" onclick="closeSelectedPanel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">✕</button>
             </div>
@@ -1309,6 +1310,177 @@ function zoomToMarker(lat, lng) {
   setTimeout(() => {
     if (map.hasLayer(ripple)) map.removeLayer(ripple);
   }, 2500);
+}
+
+function exportToShp() {
+  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+  
+  if (exportMarkers.length === 0 && (!drawnItems || drawnItems.getLayers().length === 0)) {
+    if (typeof showToast === 'function') {
+      showToast("No data on map to export", "warning");
+    } else {
+      alert("No data on map to export");
+    }
+    return;
+  }
+
+  const features = [];
+
+  // Add markers
+  exportMarkers.forEach(marker => {
+    if (marker.toGeoJSON) {
+      const geojson = marker.toGeoJSON();
+      // Ensure properties are flat for DBF and have NO nested objects
+      const flatProps = {};
+      if (marker.markerData && marker.markerData.rowData) {
+        Object.keys(marker.markerData.rowData).forEach(key => {
+          const val = marker.markerData.rowData[key];
+          // DBF only supports strings/numbers, not objects/arrays
+          if (typeof val === 'object' && val !== null) {
+            flatProps[key] = JSON.stringify(val);
+          } else {
+            flatProps[key] = val;
+          }
+        });
+        if (marker.markerData.rowIndex) {
+          flatProps.ID = marker.markerData.rowIndex;
+        }
+      }
+      geojson.properties = flatProps;
+      features.push(geojson);
+    }
+  });
+
+  // Add drawn items
+  if (drawnItems) {
+    drawnItems.eachLayer(layer => {
+      if (typeof layer.toGeoJSON === 'function') {
+        const geojson = layer.toGeoJSON();
+        // Ensure properties are defined and flat
+        geojson.properties = geojson.properties || {};
+        // Add some basic info if it's a circle
+        if (layer instanceof L.Circle) {
+          geojson.properties.TYPE = "Circle";
+          geojson.properties.RADIUS_M = layer.getRadius();
+        } else if (layer instanceof L.Polygon) {
+          geojson.properties.TYPE = "Polygon";
+        } else if (layer instanceof L.Polyline) {
+          geojson.properties.TYPE = "Line";
+        }
+        features.push(geojson);
+      }
+    });
+  }
+
+  if (features.length === 0) {
+    alert("No exportable geometries found");
+    return;
+  }
+
+  const geojson = {
+    type: 'FeatureCollection',
+    features: features
+  };
+
+  try {
+    if (typeof showProcessingOverlay === 'function') {
+      showProcessingOverlay("Generating Shapefile (ZIP)...");
+    }
+    
+    setTimeout(() => {
+      if (typeof shpwrite !== 'undefined') {
+        console.log("🛠️ Starting SHP export with shpwrite.zip...");
+        
+        // Use .zip() which returns a Promise in modern versions of shp-write
+        const options = {
+          folder: 'Coordinate_Export',
+          types: {
+            point: 'Points',
+            polygon: 'Polygons',
+            line: 'Lines'
+          }
+        };
+
+        // shpwrite.zip can be synchronous or asynchronous depending on version
+        // We'll handle it robustly
+        try {
+          const result = shpwrite.zip(geojson, options);
+          
+          const handleZipResult = (zipData) => {
+            console.log("📦 ZIP Data received, type:", typeof zipData);
+            let blob;
+            
+            if (typeof zipData === 'string') {
+              // Check if it's base64 (shp-write often returns base64)
+              try {
+                // Remove data uri prefix if present
+                const base64 = zipData.split(',').pop();
+                const binaryString = window.atob(base64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                blob = new Blob([bytes], { type: 'application/zip' });
+                console.log("✅ Converted base64 to Blob");
+              } catch (e) {
+                console.warn("⚠️ Failed base64 conversion, trying direct Blob wrapper:", e);
+                blob = new Blob([zipData], { type: 'application/zip' });
+              }
+            } else if (zipData instanceof Uint8Array || zipData instanceof ArrayBuffer) {
+              blob = new Blob([zipData], { type: 'application/zip' });
+              console.log("✅ Wrapped binary data in Blob");
+            } else if (zipData instanceof Blob) {
+              blob = zipData;
+              console.log("✅ Using direct Blob from library");
+            } else {
+              blob = new Blob([zipData], { type: 'application/zip' });
+              console.log("⚠️ Using fallback Blob wrapper");
+            }
+            
+            triggerDownload(blob, 'Coordinate_Export.zip');
+            if (typeof hideProcessingOverlay === 'function') hideProcessingOverlay();
+            if (typeof showToast === 'function') showToast("✓ Shapefile download started", "success");
+          };
+
+          if (result instanceof Promise) {
+            result.then(handleZipResult).catch(err => {
+              console.error("SHP Zip Promise Error:", err);
+              if (typeof hideProcessingOverlay === 'function') hideProcessingOverlay();
+              alert("Error generating Shapefile ZIP: " + err.message);
+            });
+          } else {
+            handleZipResult(result);
+          }
+        } catch (zipErr) {
+          console.error("SHP Zip Sync Error:", zipErr);
+          if (typeof hideProcessingOverlay === 'function') hideProcessingOverlay();
+          alert("Error during Shapefile generation: " + zipErr.message);
+        }
+      } else {
+        if (typeof hideProcessingOverlay === 'function') hideProcessingOverlay();
+        alert("Shapefile library (shp-write) not loaded properly. Please check your internet connection.");
+      }
+    }, 500);
+  } catch (error) {
+    console.error("SHP Export Catch Block Error:", error);
+    if (typeof hideProcessingOverlay === 'function') hideProcessingOverlay();
+    alert("Unexpected error exporting Shapefile: " + error.message);
+  }
+}
+
+// Helper to trigger download using modern Blob approach
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, 100);
 }
 
 function clearDrawings() {
@@ -1959,11 +2131,20 @@ function addDetailedMarker(lat, lng, rowData, rowIndex) {
 }
 
 function createPremiumPopupHTML(lat, lng, rowData, rowIndex) {
+  const isPoint = lat !== null && lng !== null && lat !== undefined && lng !== undefined;
+  const type = rowData.TYPE || (isPoint ? "Location" : "Feature");
+  const title = rowIndex ? `#${rowIndex} ${type} Details` : `${type} Details`;
+  const icon = type === "Polygon" ? "⬢" : (type === "Line" ? "⎯" : "📍");
+
   let html = `
         <div class="popup-premium-header">
-            <h4>📍 #${rowIndex} Location Details</h4>
+            <h4>${icon} ${title}</h4>
         </div>
         <div class="popup-premium-content">
+  `;
+
+  if (isPoint) {
+    html += `
             <div style="margin-bottom: 12px;">
                 <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase; font-weight: 800; margin-bottom: 5px; letter-spacing: 0.5px;">GPS COORDINATES</div>
                 <div style="background: rgba(102, 126, 234, 0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(102, 126, 234, 0.1); font-family: monospace;">
@@ -1977,7 +2158,10 @@ function createPremiumPopupHTML(lat, lng, rowData, rowIndex) {
                     </div>
                 </div>
             </div>
+    `;
+  }
             
+  html += `
             <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase; font-weight: 800; margin-bottom: 5px; letter-spacing: 0.5px;">DATA ATTRIBUTES</div>
             <div class="popup-scroll-container">
                 <table class="popup-table">
@@ -1987,8 +2171,7 @@ function createPremiumPopupHTML(lat, lng, rowData, rowIndex) {
   let hasData = false;
   for (const [key, value] of Object.entries(rowData)) {
     const lowerKey = key.toLowerCase();
-    // Skip internal/redundant keys
-    if (["latitude", "longitude", "lat", "lng", "rowIndex", "rowData"].includes(lowerKey)) continue;
+    if (["latitude", "longitude", "lat", "lng", "rowIndex", "rowData", "geometryType", "featureIndex", "coordIndex", "type"].includes(lowerKey)) continue;
 
     if (value !== null && value !== undefined && String(value).trim() !== "") {
       html += `<tr><td>${key}</td><td>${value}</td></tr>`;
@@ -2004,7 +2187,10 @@ function createPremiumPopupHTML(lat, lng, rowData, rowIndex) {
                     </tbody>
                 </table>
             </div>
-            
+  `;
+
+  if (isPoint) {
+    html += `
             <div class="popup-actions">
                 <button onclick="navigator.clipboard.writeText('${lat}, ${lng}').then(() => showToast('Coordinates Copied!', 'success'))" 
                     class="popup-btn popup-btn-copy">
@@ -2015,6 +2201,10 @@ function createPremiumPopupHTML(lat, lng, rowData, rowIndex) {
                     <span>🗺️</span> Maps
                 </a>
             </div>
+    `;
+  }
+
+  html += `
         </div>
     `;
   return html;
@@ -2761,6 +2951,7 @@ window.toggleHeatmap = toggleHeatmap;
 window.connectPoints = connectPoints;
 window.exportToGeoJSON = exportToGeoJSON;
 window.exportToJSON = exportToJSON;
+window.exportToShp = exportToShp;
 window.exportMapToPDF = exportMapToPDF;
 window.clearDrawings = clearDrawings;
 window.finishDrawing = finishDrawing;

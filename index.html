@@ -42,7 +42,7 @@
             <div class="tab-buttons">
                 <button class="tab-btn active" onclick="showTab('single')">Single Conversion</button>
                 <button class="tab-btn" onclick="showTab('batch')">Batch Conversion</button>
-                <button class="tab-btn" onclick="showTab('excel')">Excel Upload</button>
+                <button class="tab-btn" onclick="showTab('excel')">File Upload</button>
                 <button class="tab-btn" onclick="showTab('map')">🗺️ Map View</button>
                 <button class="tab-btn" onclick="showTab('processing')">📊 Data Processing</button>
                 <button class="tab-btn" onclick="showTab('history')">📜 History</button>
@@ -126,7 +126,7 @@
                 <div id="batchResult"></div>
             </div>
 
-            <!-- Excel Upload Tab -->
+            <!-- File Upload Tab -->
             <div id="excel" class="tab-content">
                 <div class="drag-drop-zone" id="dropZone" onclick="document.getElementById('excelFile').click()">
                     <h3>📤 Drag & Drop Excel/CSV File Here</h3>
@@ -141,6 +141,38 @@
 
                 <div id="columnSelection"></div>
                 <div id="excelResult"></div>
+
+                <!-- GeoJSON/JSON Upload Section -->
+                <hr style="margin-top: 30px; margin-bottom: 30px; border: none; border-top: 2px solid #ddd;">
+
+                <div class="drag-drop-zone" id="geoJsonDropZone" onclick="document.getElementById('geoJsonFile').click()" style="margin-top: 20px;">
+                    <h3>🗺️ Drag & Drop GeoJSON/JSON File Here</h3>
+                    <p>Or click to browse</p>
+                    <input type="file" id="geoJsonFile" accept=".geojson,.json" style="display:none"
+                        onchange="handleGeoJsonUpload(event)">
+                </div>
+
+                <div class="button-group" style="margin-top: 15px; display: none;" id="geoJsonClearBtnGroup">
+                    <button class="btn btn-secondary" onclick="clearGeoJsonData()">Clear</button>
+                </div>
+
+                <div id="geoJsonResult"></div>
+
+                <!-- KMZ/KML Upload Section -->
+                <hr style="margin-top: 30px; margin-bottom: 30px; border: none; border-top: 2px solid #ddd;">
+
+                <div class="drag-drop-zone" id="kmlDropZone" onclick="document.getElementById('kmlFile').click()" style="margin-top: 20px;">
+                    <h3>📂 Drag & Drop KMZ/KML File Here</h3>
+                    <p>Or click to browse</p>
+                    <input type="file" id="kmlFile" accept=".kml,.kmz" style="display:none"
+                        onchange="handleKmlUpload(event)">
+                </div>
+
+                <div class="button-group" style="margin-top: 15px; display: none;" id="kmlClearBtnGroup">
+                    <button class="btn btn-secondary" onclick="clearKmlData()">Clear</button>
+                </div>
+
+                <div id="kmlResult"></div>
             </div>
 
             <!-- Map View Tab -->
@@ -161,6 +193,7 @@
                         <button class="btn btn-success" onclick="exportToGeoJSON()">Export GeoJSON</button>
                         <button class="btn btn-success" onclick="exportToJSON()">Export JSON</button>
                         <button class="btn btn-success" onclick="exportToKML()">Export KML</button>
+                        <button class="btn btn-success" onclick="exportToShp()">Export SHP</button>
                         <div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
                             <label for="pdfResolution" style="font-size: 0.9em; font-weight: 600;">Def:</label>
                             <select id="pdfResolution"
@@ -693,6 +726,8 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 
     <!-- Advanced GIS Libraries -->
@@ -702,6 +737,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/@mapbox/shp-write@latest/shpwrite.js"></script>
 
     <!-- Modularized component scripts -->
     <script src="src/js/variables.js"></script>
@@ -712,6 +748,8 @@
     <script src="src/js/map.js"></script>
     <script src="src/js/tools.js"></script>
     <script src="src/js/excel.js"></script>
+    <script src="src/js/geojson.js"></script>
+    <script src="src/js/kml.js"></script>
     <script src="src/js/app.js"></script>
 
     <!-- Welcome Modal -->
@@ -745,8 +783,8 @@
                     <div class="feature-item">
                         <span class="feature-icon">📊</span>
                         <div class="feature-text">
-                            <h4>Excel Upload</h4>
-                            <p>Upload large datasets (XLSX, CSV) for automated processing.</p>
+                            <h4>File Upload</h4>
+                            <p>Upload large datasets (XLSX, CSV, GeoJSON, JSON) for automated processing.</p>
                         </div>
                     </div>
                     <div class="feature-item">

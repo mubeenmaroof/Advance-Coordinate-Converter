@@ -83,26 +83,71 @@ function closeWelcomeModal() {
 function setupDragDrop() {
   const dropZone = document.getElementById("dropZone");
 
-  if (!dropZone) return;
+  if (dropZone) {
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
 
-  dropZone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropZone.classList.add("dragover");
-  });
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
 
-  dropZone.addEventListener("dragleave", () => {
-    dropZone.classList.remove("dragover");
-  });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFile(files[0]);
+      }
+    });
+  }
 
-  dropZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("dragover");
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      document.getElementById("excelFile").files = files;
-      handleExcelFile(files[0]);
-    }
-  });
+  // GeoJSON Drop Zone Setup
+  const geoJsonDropZone = document.getElementById("geoJsonDropZone");
+
+  if (geoJsonDropZone) {
+    geoJsonDropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      geoJsonDropZone.classList.add("dragover");
+    });
+
+    geoJsonDropZone.addEventListener("dragleave", () => {
+      geoJsonDropZone.classList.remove("dragover");
+    });
+
+    geoJsonDropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      geoJsonDropZone.classList.remove("dragover");
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleGeoJsonFile(files[0]);
+      }
+    });
+  }
+
+  // KML/KMZ Drop Zone Setup
+  const kmlDropZone = document.getElementById("kmlDropZone");
+
+  if (kmlDropZone) {
+    kmlDropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      kmlDropZone.classList.add("dragover");
+    });
+
+    kmlDropZone.addEventListener("dragleave", () => {
+      kmlDropZone.classList.remove("dragover");
+    });
+
+    kmlDropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      kmlDropZone.classList.remove("dragover");
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleKmlFile(files[0]);
+      }
+    });
+  }
 }
 
 function generateExportFileName(fileInputIds, toolName, extension) {

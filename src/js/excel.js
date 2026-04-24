@@ -1,41 +1,78 @@
 // Excel and file handling utilities
 
 function handleFileUpload(event) {
+  console.log("📁 Excel file upload triggered", event);
   const file = event.target.files[0];
-  if (file && validateFileSize(file)) {
+  
+  if (!file) {
+    console.error("❌ No file selected");
+    return;
+  }
+  
+  console.log("📄 File selected:", file.name, "Size:", file.size, "Type:", file.type);
+  
+  if (validateFileSize(file)) {
+    console.log("✅ File size validated");
     const clearBtnRow = document.getElementById("excelClearBtnGroup");
-    if (clearBtnRow) clearBtnRow.style.display = "block";
+    if (clearBtnRow) {
+      clearBtnRow.style.display = "block";
+      console.log("✅ Clear button shown");
+    }
     handleFile(file);
+  } else {
+    console.error("❌ File size validation failed");
   }
 }
 
 function handleFile(file) {
+  console.log("📖 Starting file read for:", file.name);
   const reader = new FileReader();
   reader.onload = function (e) {
     try {
-      let data;
-      if (file.name.endsWith(".csv")) {
-        const text = e.target.result;
-        data = parseCSV(text);
-        window.excelWorkbook = null;
-        processExcelData(data);
-      } else {
-        const workbook = XLSX.read(e.target.result, { type: "binary" });
-        window.excelWorkbook = workbook;
-        if (workbook.SheetNames.length > 1) {
-          displaySheetSelection(workbook);
+      showProcessingOverlay("Reading File...");
+      setTimeout(() => {
+        console.log("📖 File loaded, processing...");
+        let data;
+        if (file.name.endsWith(".csv")) {
+          console.log("🔄 Processing as CSV");
+          const text = e.target.result;
+          data = parseCSV(text);
+          window.excelWorkbook = null;
+          processExcelData(data);
         } else {
-          const sheetName = workbook.SheetNames[0];
-          const sheet = workbook.Sheets[sheetName];
-          data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-          processExcelData(data, sheetName);
+          console.log("🔄 Processing as Excel (.xlsx/.xls)");
+          const workbook = XLSX.read(e.target.result, { type: "binary" });
+          window.excelWorkbook = workbook;
+          if (workbook.SheetNames.length > 1) {
+            console.log("📑 Multiple sheets found:", workbook.SheetNames.length);
+            displaySheetSelection(workbook);
+          } else {
+            console.log("📊 Single sheet found");
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            processExcelData(data, sheetName);
+          }
         }
-      }
+        console.log("✅ File processed successfully");
+        hideProcessingOverlay();
+      }, 100);
     } catch (error) {
+      console.error("❌ Error reading file:", error);
+      hideProcessingOverlay();
       document.getElementById("excelResult").innerHTML =
         `<div class="error">Error reading file: ${error.message}</div>`;
     }
   };
+  
+  reader.onerror = function(error) {
+    console.error("❌ FileReader error:", error);
+    hideProcessingOverlay();
+    document.getElementById("excelResult").innerHTML =
+      `<div class="error">Error reading file: File read error</div>`;
+  };
+  
+  showProcessingOverlay("Reading File...");
   if (file.name.endsWith(".csv")) {
     reader.readAsText(file);
   } else {
@@ -68,8 +105,12 @@ function selectSheet(sheetIndex) {
   const workbook = window.excelWorkbook;
   const sheetName = workbook.SheetNames[sheetIndex];
   const sheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-  processExcelData(data, sheetName);
+  showProcessingOverlay(`Processing Sheet: ${sheetName}...`);
+  setTimeout(() => {
+    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    processExcelData(data, sheetName);
+    hideProcessingOverlay();
+  }, 100);
 }
 
 function isCoordinateColumn(columnData) {
@@ -209,14 +250,14 @@ function convertExcelData() {
     return;
   }
   const conversionType = document.getElementById("excelConversionType").value;
-  
+
   showProcessingOverlay("Converting Coordinates...");
   const worker = initWorker();
-  
-  window.currentWorkerCallback = function(result) {
+
+  window.currentWorkerCallback = function (result) {
     const convertedData = result.convertedData;
     coordinateDataStore = [];
-    
+
     // Process coordinates for map after conversion
     for (let rowIndex = 1; rowIndex < convertedData.length; rowIndex++) {
       const rowData = {};
@@ -225,7 +266,7 @@ function convertExcelData() {
         rowData[header || `Column ${colIndex + 1}`] =
           convertedData[rowIndex][colIndex];
       });
-      
+
       selectedColumns.forEach((colIndex) => {
         const value = convertedData[rowIndex][colIndex];
         if (value) {
@@ -240,7 +281,7 @@ function convertExcelData() {
           }
         }
       });
-      
+
       if (coordinates.length >= 2) {
         coordinateDataStore.push({
           lat: coordinates[0],
@@ -252,7 +293,7 @@ function convertExcelData() {
     }
     displayConvertedData(convertedData, selectedColumns);
   };
-  
+
   worker.postMessage({
     type: 'convert',
     payload: {
@@ -329,7 +370,7 @@ function downloadExcelResults() {
   // For XLSX, we can still use the worker but the summary sheet is complex.
   // We'll pass the summary AOA to the worker if we update the worker to handle multiple sheets.
   // For now, let's just export the main data sheet via worker for performance.
-  
+
   worker.postMessage({
     type: 'excel_export',
     payload: {
@@ -412,13 +453,13 @@ function clearExcelData() {
   excelData = null;
   detectedColumns = [];
   coordinateDataStore = [];
-  
+
   const fileInput = document.getElementById("excelFile");
   if (fileInput) fileInput.value = "";
-  
+
   const selectionDiv = document.getElementById("columnSelection");
   if (selectionDiv) selectionDiv.innerHTML = "";
-  
+
   const resultDiv = document.getElementById("excelResult");
   if (resultDiv) resultDiv.innerHTML = "";
 
@@ -437,3 +478,4 @@ window.convertExcelData = convertExcelData;
 window.downloadExcelResults = downloadExcelResults;
 window.showExcelOnMap = showExcelOnMap;
 window.clearExcelData = clearExcelData;
+

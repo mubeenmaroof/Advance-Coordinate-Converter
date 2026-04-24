@@ -101,5 +101,13 @@ let geocodingSelectedSheet = null;
 let geocodingSelectedColumn = null;
 let isGeocodingCancelled = false;
 
+// GeoJSON Variables
+let currentGeoJsonData = null;
+let geoJsonCoordinateStore = [];
+
+// KML/KMZ Variables
+let currentKmlData = null;
+let kmlCoordinateStore = [];
+
 
 // the following DOM listeners are moved to their respective modules (dedupe/split/comparison etc)
