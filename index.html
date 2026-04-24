@@ -129,11 +129,14 @@
 
             <!-- File Upload Tab -->
             <div id="excel" class="tab-content">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(45%, 1fr)); gap: 25px; align-items: start;">
-                    
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(45%, 1fr)); gap: 25px; align-items: start;">
+
                     <!-- Excel/CSV Upload -->
-                    <div id="excelCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="dropZone" onclick="document.getElementById('excelFile').click()">
+                    <div id="excelCard" class="upload-section-card"
+                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="dropZone"
+                            onclick="document.getElementById('excelFile').click()">
                             <h3>📤 Drag & Drop Excel/CSV File</h3>
                             <p>Or click to browse</p>
                             <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none"
@@ -147,8 +150,10 @@
                     </div>
 
                     <!-- GeoJSON/JSON Upload -->
-                    <div id="geoJsonCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="geoJsonDropZone" onclick="document.getElementById('geoJsonFile').click()">
+                    <div id="geoJsonCard" class="upload-section-card"
+                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="geoJsonDropZone"
+                            onclick="document.getElementById('geoJsonFile').click()">
                             <h3>🗺️ Drag & Drop GeoJSON/JSON File</h3>
                             <p>Or click to browse</p>
                             <input type="file" id="geoJsonFile" accept=".geojson,.json" style="display:none"
@@ -161,8 +166,10 @@
                     </div>
 
                     <!-- KMZ/KML Upload -->
-                    <div id="kmlCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="kmlDropZone" onclick="document.getElementById('kmlFile').click()">
+                    <div id="kmlCard" class="upload-section-card"
+                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="kmlDropZone"
+                            onclick="document.getElementById('kmlFile').click()">
                             <h3>📂 Drag & Drop KMZ/KML File</h3>
                             <p>Or click to browse</p>
                             <input type="file" id="kmlFile" accept=".kml,.kmz" style="display:none"
@@ -175,12 +182,14 @@
                     </div>
 
                     <!-- Shapefile Upload -->
-                    <div id="shpCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="shpDropZone" onclick="document.getElementById('shpFile').click()">
+                    <div id="shpCard" class="upload-section-card"
+                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="shpDropZone"
+                            onclick="document.getElementById('shpFile').click()">
                             <h3>📦 Drag & Drop Shapefile Components</h3>
                             <p>Select all: <strong>.shp, .dbf, .shx, .prj</strong></p>
-                            <input type="file" id="shpFile" accept=".shp,.dbf,.shx,.prj" style="display:none"
-                                multiple onchange="handleShpUpload(event)">
+                            <input type="file" id="shpFile" accept=".shp,.dbf,.shx,.prj" style="display:none" multiple
+                                onchange="handleShpUpload(event)">
                         </div>
                         <div class="button-group" style="margin-top: 15px; display: none;" id="shpClearBtnGroup">
                             <button class="btn btn-secondary" onclick="clearShpData()">Clear</button>
@@ -189,8 +198,10 @@
                     </div>
 
                     <!-- GPX Upload -->
-                    <div id="gpxCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="gpxDropZone" onclick="document.getElementById('gpxFile').click()">
+                    <div id="gpxCard" class="upload-section-card"
+                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div class="drag-drop-zone" id="gpxDropZone"
+                            onclick="document.getElementById('gpxFile').click()">
                             <h3>🛰️ Drag & Drop GPX File</h3>
                             <p>Waypoints, Tracks & Routes</p>
                             <input type="file" id="gpxFile" accept=".gpx" style="display:none"
@@ -737,60 +748,81 @@
 
             <!-- About Tab -->
             <div id="about" class="tab-content">
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 20px; text-align: center; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+                <div
+                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 20px; text-align: center; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
                     <h1 style="font-size: 2.5em; margin-bottom: 10px;">🌍 Advanced Coordinate Converter</h1>
                     <p style="font-size: 1.2em; opacity: 0.9;">Professional Grade GIS & Spatial Data Management Tool</p>
                 </div>
 
                 <div class="grid-2" style="gap: 30px;">
-                    <div style="background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                    <div
+                        style="background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <h3 style="color: #667eea; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 1.3em;">🚀</span> Project Overview
                         </h3>
                         <p style="line-height: 1.7; color: #475569; margin-bottom: 15px;">
-                            The <strong>Advanced Coordinate Conversion System</strong> is an industrial-grade GIS application engineered for high-accuracy spatial data transformation and visualization. Developed for surveyors, GIS specialists, and data engineers, it offers a unified pipeline for managing complex coordinate systems.
+                            The <strong>Advanced Coordinate Conversion System</strong> is an industrial-grade GIS
+                            application engineered for high-accuracy spatial data transformation and visualization.
+                            Developed for surveyors, GIS specialists, and data engineers, it offers a unified pipeline
+                            for managing complex coordinate systems.
                         </p>
                         <p style="line-height: 1.7; color: #475569; margin-bottom: 15px; font-size: 0.9em;">
-                            The system leverages <strong>Web Worker technology</strong> to process massive datasets (Excel, CSV, Shapefile, KML, GPX, GeoJSON) in background threads, ensuring zero UI latency. It features an advanced <strong>Leaflet-based mapping engine</strong> with dynamic clustering, spatial drawing, and high-fidelity PDF report generation for professional documentation.
+                            The system leverages <strong>Web Worker technology</strong> to process massive datasets
+                            (Excel, CSV, Shapefile, KML, GPX, GeoJSON) in background threads, ensuring zero UI latency.
+                            It features an advanced <strong>Leaflet-based mapping engine</strong> with dynamic
+                            clustering, spatial drawing, and high-fidelity PDF report generation for professional
+                            documentation.
                         </p>
                         <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div style="padding: 15px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #667eea;">
-                                <strong style="display: block; font-size: 0.9em; color: #667eea;">Spatial Analytics</strong>
+                            <div
+                                style="padding: 15px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #667eea;">
+                                <strong style="display: block; font-size: 0.9em; color: #667eea;">Spatial
+                                    Analytics</strong>
                                 <span style="font-size: 0.85em;">Turf.js Integrated Processing</span>
                             </div>
-                            <div style="padding: 15px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #667eea;">
+                            <div
+                                style="padding: 15px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #667eea;">
                                 <strong style="display: block; font-size: 0.9em; color: #667eea;">Batch Engine</strong>
                                 <span style="font-size: 0.85em;">Zero-Latency Data Handling</span>
                             </div>
                         </div>
                     </div>
 
-                    <div style="background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                    <div
+                        style="background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         <h3 style="color: #667eea; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 1.3em;">👨‍💻</span> Developer & Contact
                         </h3>
                         <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
-                            <div style="width: 60px; height: 60px; background: #667eea; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 1.5em;">MM</div>
+                            <div
+                                style="width: 60px; height: 60px; background: #667eea; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 1.5em;">
+                                MM</div>
                             <div>
                                 <h4 style="margin: 0; font-size: 1.1em;">M. Mubeen Maroof</h4>
                                 <p style="margin: 0; color: #64748b; font-size: 0.9em;">Sr. GIS Specialist</p>
                             </div>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <a href="mailto:mubeen.maroof@cyber.net.pk" style="text-decoration: none; color: #475569; display: flex; align-items: center; gap: 10px; font-size: 0.95em;">
+                            <p style="margin: 0; font-size: 0.85em; color: #64748b; font-weight: 600;">For Query &
+                                Suggestions</p>
+                            <a href="mailto:mubeen.maroof@cyber.net.pk"
+                                style="text-decoration: none; color: #475569; display: flex; align-items: center; gap: 10px; font-size: 0.95em;">
                                 <span style="font-size: 1.2em;">✉️</span> mubeen.maroof@cyber.net.pk
                             </a>
-                            <a href="https://cyber.net.pk/" target="_blank" style="text-decoration: none; color: #475569; display: flex; align-items: center; gap: 10px; font-size: 0.95em;">
+                            <a href="https://cyber.net.pk/" target="_blank"
+                                style="text-decoration: none; color: #475569; display: flex; align-items: center; gap: 10px; font-size: 0.95em;">
                                 <img src="CN.jpg" style="height: 24px; border-radius: 4px;"> Cyber Internet Services
                             </a>
                         </div>
-                        <div style="margin-top: 25px; padding: 10px; text-align: center; background: #f1f5f9; border-radius: 8px; font-size: 0.85em; color: #64748b; font-weight: 600;">
-                             2026 All Rights Reserved
+                        <div
+                            style="margin-top: 25px; padding: 10px; text-align: center; background: #f1f5f9; border-radius: 8px; font-size: 0.85em; color: #64748b; font-weight: 600;">
+                            2026 All Rights Reserved
                         </div>
                     </div>
                 </div>
 
-                <div style="margin-top: 30px; background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0;">
+                <div
+                    style="margin-top: 30px; background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0;">
                     <h3 style="color: #667eea; margin-bottom: 20px; text-align: center;">🛠️ Core Capabilities</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
                         <div style="text-align: center; padding: 15px;">
@@ -881,7 +913,7 @@
                         <span class="feature-icon">📊</span>
                         <div class="feature-text">
                             <h4>File Upload</h4>
-                            <p>Upload large datasets (XLSX, CSV, GeoJSON, JSON) for automated processing.</p>
+                            <p>Process professional GIS data including XLSX, CSV, GeoJSON, KML, GPX, and Shapefiles.</p>
                         </div>
                     </div>
                     <div class="feature-item">
@@ -907,9 +939,8 @@
                     </div>
                 </div>
 
-                <div class="author-attribution">
-                    <p>Designed & Coded by: <strong>M. Mubeen Maroof</strong></p>
-                    <p>Sr. GIS Specialist</p>
+                <div class="about-hint" style="text-align: center; margin-top: 25px; padding: 15px; background: #f0f7ff; border-radius: 10px; border: 1px solid #cce3ff; color: #0056b3; font-size: 0.9em;">
+                    <span style="font-size: 1.2em;">ℹ️</span> For project details and contact information, please visit the <strong>About</strong> tab.
                 </div>
             </div>
             <div class="modal-footer">
