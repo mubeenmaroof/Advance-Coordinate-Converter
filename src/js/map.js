@@ -2596,7 +2596,7 @@ async function exportMapToPDF() {
   try {
     const btn = document.querySelector('button[onclick="exportMapToPDF()"]');
     const originalText = btn.textContent;
-    btn.textContent = "🚀 Generating Report...";
+    btn.textContent = "⌛ Building Report...";
     btn.disabled = true;
 
     let resolutionScale = 3;
@@ -2624,103 +2624,214 @@ async function exportMapToPDF() {
 
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 15;
+    const margin = 12;
     const contentWidth = pageWidth - margin * 2;
 
-    // --- 1. Professional Header ---
-    // Header Background
-    pdf.setFillColor(102, 126, 234); // Primary Blue
-    pdf.rect(0, 0, pageWidth, 35, "F");
+    // --- PAGE 1: EXECUTIVE SUMMARY & MAP ---
 
-    // Header Accent Line
-    pdf.setDrawColor(255, 255, 255);
-    pdf.setLineWidth(0.5);
-    pdf.line(margin, 28, pageWidth - margin, 28);
+    // 1. Cinematic Header
+    pdf.setFillColor(30, 41, 59); // Slate 800
+    pdf.rect(0, 0, pageWidth, 40, "F");
+    
+    // Header Accent (Gradient look)
+    pdf.setFillColor(102, 126, 234); // Indigo
+    pdf.rect(0, 36, pageWidth, 4, "F");
 
-    // Logo/Title Text
     pdf.setTextColor(255, 255, 255);
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(22);
-    pdf.text("Advanced Coordinate Converter", margin, 18);
+    pdf.setFontSize(24);
+    pdf.text("GIS ANALYSIS REPORT", margin, 20);
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
-    pdf.text("Professional GIS Mapping Report", margin, 25);
-
-    // --- 2. Metadata Section ---
-    pdf.setTextColor(45, 55, 72); // Dark slate
+    pdf.text(`PROJECT: Advanced Coordinate Conversion System | ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}`, margin, 28);
+    
+    // Right side header info
     pdf.setFontSize(9);
+    pdf.text(`EXPORT DATE: ${new Date().toLocaleDateString()}`, pageWidth - margin - 50, 18);
+    pdf.text(`SYSTEM TIME: ${new Date().toLocaleTimeString()}`, pageWidth - margin - 50, 24);
+
+    // 2. Spatial Metadata Block
+    const metaY = 55;
+    pdf.setTextColor(30, 41, 59);
     pdf.setFont("helvetica", "bold");
-
-    const metaY = 45;
-    pdf.text("REPORT METADATA", margin, metaY - 5);
-
+    pdf.setFontSize(11);
+    pdf.text("📍 SPATIAL CONTEXT", margin, metaY);
+    
     pdf.setDrawColor(226, 232, 240);
-    pdf.setLineWidth(0.1);
-    pdf.line(margin, metaY - 3, pageWidth - margin, metaY - 3);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, metaY + 2, pageWidth - margin, metaY + 2);
 
-    const col1 = margin;
-    const col2 = margin + contentWidth / 2;
+    // Stats Cards (simulated)
+    const cardWidth = 60;
+    const cardY = metaY + 10;
+    
+    // Card 1: Data Source
+    pdf.setFillColor(248, 250, 252);
+    pdf.roundedRect(margin, cardY, cardWidth, 18, 2, 2, "F");
+    pdf.setTextColor(100, 116, 139);
+    pdf.setFontSize(8);
+    pdf.text("COORDINATE SYSTEM", margin + 4, cardY + 6);
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFontSize(10);
+    pdf.text("WGS 84 (EPSG:4326)", margin + 4, cardY + 13);
 
-    pdf.setFont("helvetica", "normal");
-    // Row 1
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Date Exported:", col1, metaY + 5);
-    pdf.setFont("helvetica", "normal");
-    pdf.text(new Date().toLocaleString(), col1 + 25, metaY + 5);
+    // Card 2: Feature Count
+    pdf.setFillColor(248, 250, 252);
+    pdf.roundedRect(margin + cardWidth + 10, cardY, cardWidth, 18, 2, 2, "F");
+    pdf.setTextColor(100, 116, 139);
+    pdf.setFontSize(8);
+    pdf.text("TOTAL FEATURES", margin + cardWidth + 14, cardY + 6);
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFontSize(10);
+    pdf.text(`${markers.length} Locations Mapped`, margin + cardWidth + 14, cardY + 13);
 
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Total Points Mapped:", col2, metaY + 5);
-    pdf.setFont("helvetica", "normal");
-    pdf.text(markers.length.toString(), col2 + 35, metaY + 5);
+    // Card 3: Viewport
+    const center = map.getCenter();
+    pdf.setFillColor(248, 250, 252);
+    pdf.roundedRect(margin + (cardWidth + 10) * 2, cardY, cardWidth + 20, 18, 2, 2, "F");
+    pdf.setTextColor(100, 116, 139);
+    pdf.setFontSize(8);
+    pdf.text("CENTER POINT", margin + (cardWidth + 10) * 2 + 4, cardY + 6);
+    pdf.setTextColor(30, 41, 59);
+    pdf.setFontSize(10);
+    pdf.text(`${center.lat.toFixed(4)}°N, ${center.lng.toFixed(4)}°E`, margin + (cardWidth + 10) * 2 + 4, cardY + 13);
 
-    // --- 3. The Map Imagery ---
+    // 3. High Resolution Map Image
     const imgProps = pdf.getImageProperties(imgData);
-    const mapDisplayWidth = contentWidth;
-    const mapDisplayHeight =
-      (imgProps.height * mapDisplayWidth) / imgProps.width;
-
-    // Ensure map doesn't overflow page
-    const availableHeight = pageHeight - metaY - 30; // space for footer
-    let finalMapHeight = mapDisplayHeight;
-    let finalMapWidth = mapDisplayWidth;
+    const mapAreaWidth = contentWidth;
+    const availableHeight = pageHeight - cardY - 45; // Space for image and footer
+    
+    let finalMapWidth = mapAreaWidth;
+    let finalMapHeight = (imgProps.height * finalMapWidth) / imgProps.width;
 
     if (finalMapHeight > availableHeight) {
       finalMapHeight = availableHeight;
       finalMapWidth = (imgProps.width * finalMapHeight) / imgProps.height;
     }
 
-    // Center map horizontal
     const mapX = margin + (contentWidth - finalMapWidth) / 2;
-    const mapY = metaY + 12;
+    const mapY = cardY + 25;
 
-    // Border for map
-    pdf.setDrawColor(160, 174, 192);
-    pdf.setLineWidth(0.3);
-    pdf.rect(mapX - 0.5, mapY - 0.5, finalMapWidth + 1, finalMapHeight + 1);
-
+    // Map Frame
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.5);
+    pdf.rect(mapX - 1, mapY - 1, finalMapWidth + 2, finalMapHeight + 2);
+    
     pdf.addImage(imgData, "PNG", mapX, mapY, finalMapWidth, finalMapHeight);
 
-    // --- 4. Branded Footer ---
-    pdf.setFillColor(248, 250, 252);
-    pdf.rect(0, pageHeight - 15, pageWidth, 15, "F");
+    // North Arrow Overlay
+    pdf.setDrawColor(30, 41, 59);
+    pdf.setLineWidth(0.5);
+    const arrowX = mapX + finalMapWidth - 15;
+    const arrowY = mapY + 15;
+    pdf.line(arrowX, arrowY, arrowX, arrowY - 10); // Vertical
+    pdf.line(arrowX, arrowY - 10, arrowX - 2, arrowY - 6); // Wing L
+    pdf.line(arrowX, arrowY - 10, arrowX + 2, arrowY - 6); // Wing R
+    pdf.setFontSize(8);
+    pdf.text("N", arrowX - 1.5, arrowY - 12);
 
-    pdf.setDrawColor(226, 232, 240);
-    pdf.line(0, pageHeight - 15, pageWidth, pageHeight - 15);
+    // 4. Footer Page 1
+    pdf.setFillColor(241, 245, 249);
+    pdf.rect(0, pageHeight - 12, pageWidth, 12, "F");
+    pdf.setTextColor(100, 116, 139);
+    pdf.setFontSize(8);
+    pdf.text("© 2026 Advanced Coordinate Conversion System | Professional Output", margin, pageHeight - 5);
+    pdf.text("Page 01", pageWidth - margin - 15, pageHeight - 5);
 
-    pdf.setTextColor(113, 128, 150);
-    pdf.setFontSize(9);
-    pdf.setFont("helvetica", "bold");
-    const footerText = "Advanced Coordinate Conversion Tool © 2026";
-    const textWidth =
-      (pdf.getStringUnitWidth(footerText) * pdf.getFontSize()) /
-      pdf.internal.scaleFactor;
-    pdf.text(footerText, (pageWidth - textWidth) / 2, pageHeight - 7);
+    // --- PAGE 2: DATA INVENTORY ---
+    if (markers.length > 0) {
+      pdf.addPage();
+      
+      // Secondary Header
+      pdf.setFillColor(30, 41, 59);
+      pdf.rect(0, 0, pageWidth, 25, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(16);
+      pdf.text("DATA INVENTORY & ATTRIBUTE LIST", margin, 16);
+      
+      const tableY = 35;
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("DETAILED LOG", margin, tableY);
+      
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(margin, tableY + 2, pageWidth - margin, tableY + 2);
+
+      // Table Header
+      const rowH = 10;
+      let currentY = tableY + 8;
+      
+      pdf.setFillColor(102, 126, 234);
+      pdf.rect(margin, currentY, contentWidth, rowH, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(9);
+      pdf.text("ID", margin + 3, currentY + 6.5);
+      pdf.text("LATITUDE", margin + 15, currentY + 6.5);
+      pdf.text("LONGITUDE", margin + 45, currentY + 6.5);
+      pdf.text("REMARKS / ADDITIONAL ATTRIBUTES", margin + 75, currentY + 6.5);
+
+      currentY += rowH;
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFont("helvetica", "normal");
+      
+      // Show up to 15 items to keep it clean on one page
+      const displayCount = Math.min(markers.length, 15);
+      for (let i = 0; i < displayCount; i++) {
+        const m = markers[i];
+        const latlng = m.getLatLng();
+        const rowData = (m.markerData && m.markerData.rowData) ? m.markerData.rowData : {};
+        
+        // Zebra striping
+        if (i % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(margin, currentY, contentWidth, rowH, "F");
+        }
+        
+        pdf.text(`${i + 1}`, margin + 3, currentY + 6.5);
+        pdf.text(`${latlng.lat.toFixed(6)}`, margin + 15, currentY + 6.5);
+        pdf.text(`${latlng.lng.toFixed(6)}`, margin + 45, currentY + 6.5);
+        
+        // Remarks preview
+        const remarks = Object.entries(rowData)
+          .filter(([k]) => !['lat', 'lng', 'latitude', 'longitude'].includes(k.toLowerCase()))
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(" | ")
+          .substring(0, 110);
+          
+        pdf.setFontSize(8);
+        pdf.text(remarks || "No additional data", margin + 75, currentY + 6.5);
+        pdf.setFontSize(9);
+        
+        currentY += rowH;
+        
+        // If getting near bottom, stop
+        if (currentY > pageHeight - 30) break;
+      }
+      
+      if (markers.length > displayCount) {
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "italic");
+        pdf.setTextColor(148, 163, 184);
+        pdf.text(`Note: Showing first ${displayCount} of ${markers.length} records. Download CSV for full dataset.`, margin, currentY + 10);
+      }
+
+      // Footer Page 2
+      pdf.setFillColor(241, 245, 249);
+      pdf.rect(0, pageHeight - 12, pageWidth, 12, "F");
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFontSize(8);
+      pdf.text("© 2026 Advanced Coordinate Conversion System | Professional Output", margin, pageHeight - 5);
+      pdf.text("Page 02", pageWidth - margin - 15, pageHeight - 5);
+    }
 
     pdf.save(`GIS-Report-${new Date().getTime()}.pdf`);
 
     btn.textContent = originalText;
     btn.disabled = false;
+    showToast("✓ Professional PDF Report Generated", "success");
+    
   } catch (e) {
     console.error("PDF Export Error:", e);
     alert("Error generating PDF: " + e.message);
