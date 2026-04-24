@@ -89,6 +89,7 @@ body.dark-mode .container {
   display: flex;
   gap: 10px;
   margin-bottom: 30px;
+  height: 70px;
   flex-wrap: wrap;
 }
 
