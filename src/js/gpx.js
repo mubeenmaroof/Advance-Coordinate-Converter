@@ -4,6 +4,10 @@ let gpxCoordinateStore = [];
 let currentGpxData = null;
 
 function handleGpxUpload(event) {
+  if (window.checkExistingData && window.checkExistingData()) {
+    event.target.value = '';
+    return;
+  }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -45,6 +49,7 @@ function processGpxData(gpxString, fileName) {
 
     if (gpxCoordinateStore.length > 0) {
       renderGpxSuccessUI(fileName, gpxCoordinateStore.length);
+      if (typeof syncUploadUI === 'function') syncUploadUI();
     } else {
       resultDiv.innerHTML = `<div class="error">❌ No identifiable coordinates found in "${fileName}".</div>`;
     }
@@ -177,37 +182,71 @@ function showGpxOnMap() {
     clearMapMarkers();
     
     if (currentGpxData) {
-      L.geoJSON(currentGpxData, {
+      const renderer = L.canvas({ padding: 0.5 });
+      
+      const geoLayer = L.geoJSON(currentGpxData, {
+        renderer: renderer,
         onEachFeature: function (feature, layer) {
           if (feature.properties) {
-            const popupContent = createPremiumPopupHTML(null, null, feature.properties, null);
+            const props = { ...feature.properties };
+            if (feature.geometry.type.includes("Line")) props.TYPE = "Track/Route";
+            
+            const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' });
           }
         },
         pointToLayer: function (feature, latlng) {
+          const serialNumber = (gpxCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
+
+          if (typeof addDetailedMarker === "function") {
+             addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             return L.layerGroup(); 
+          }
+
           return L.circleMarker(latlng, {
-            radius: 6,
-            fillColor: "#667eea",
-            color: "#fff",
+            radius: 8,
+            fillColor: "#ff4b2b",
+            color: "#ffffff",
             weight: 2,
             opacity: 1,
-            fillOpacity: 0.8
+            fillOpacity: 1
           });
+        },
+        style: function(feature) {
+          return {
+            color: "#ff416c",
+            weight: 4,
+            opacity: 0.8,
+            dashArray: "5, 10"
+          };
         }
       }).addTo(map);
+
+      // Fit bounds
+      try {
+        const bounds = geoLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [30, 30] });
+        } else if (markers.length > 0) {
+          const group = L.featureGroup(markers);
+          map.fitBounds(group.getBounds(), { padding: [30, 30] });
+        }
+      } catch(e) {
+        console.error("Error fitting bounds:", e);
+      }
     }
     
-    // Fit bounds
-    const group = L.featureGroup(markers);
-    if (markers.length > 0) {
-       map.fitBounds(group.getBounds(), { padding: [30, 30] });
-    }
-  }, 200);
+    updateMapStats();
+  }, 300);
 }
 
 function clearGpxData() {
   gpxCoordinateStore = [];
   currentGpxData = null;
+  
+  if (typeof clearMapMarkers === "function") clearMapMarkers();
+  if (typeof syncUploadUI === "function") syncUploadUI();
+  
   document.getElementById("gpxResult").innerHTML = "";
   document.getElementById("gpxClearBtnGroup").style.display = "none";
   document.getElementById("gpxFile").value = "";

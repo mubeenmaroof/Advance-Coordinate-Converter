@@ -2,6 +2,10 @@
 
 function handleFileUpload(event) {
   console.log("📁 Excel file upload triggered", event);
+  if (window.checkExistingData && window.checkExistingData()) {
+    event.target.value = '';
+    return;
+  }
   const file = event.target.files[0];
 
   if (!file) {
@@ -39,6 +43,7 @@ function handleFile(file) {
           data = parseCSV(text);
           window.excelWorkbook = null;
           processExcelData(data);
+          if (typeof syncUploadUI === 'function') syncUploadUI();
         } else {
           console.log("🔄 Processing as Excel (.xlsx/.xls)");
           const workbook = XLSX.read(e.target.result, { type: "binary" });
@@ -52,6 +57,7 @@ function handleFile(file) {
             const sheet = workbook.Sheets[sheetName];
             data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             processExcelData(data, sheetName);
+            if (typeof syncUploadUI === 'function') syncUploadUI();
           }
         }
         console.log("✅ File processed successfully");
@@ -490,6 +496,9 @@ function clearExcelData() {
   detectedColumns = [];
   coordinateDataStore = [];
 
+  if (typeof clearMapMarkers === "function") clearMapMarkers();
+  if (typeof syncUploadUI === "function") syncUploadUI();
+  
   const fileInput = document.getElementById("excelFile");
   if (fileInput) fileInput.value = "";
 

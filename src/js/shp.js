@@ -1,6 +1,10 @@
 // Shapefile (.zip) File Handling Functions
 
 function handleShpUpload(event) {
+  if (window.checkExistingData && window.checkExistingData()) {
+    event.target.value = '';
+    return;
+  }
   const files = event.target.files;
   if (!files || files.length === 0) return;
   
@@ -76,6 +80,7 @@ async function handleShpFiles(files) {
       } else if (type === 'complete') {
         currentShpData = geojson;
         processShpData(geojson);
+        if (typeof syncUploadUI === 'function') syncUploadUI();
         
         dropZone.innerHTML = `<h3>✅ ${fileMap.shp.name}</h3><p>Processed in background</p>`;
         if (clearBtnGroup) clearBtnGroup.style.display = "block";
@@ -391,6 +396,10 @@ function showShpOnMap() {
 function clearShpData() {
   currentShpData = null;
   shpCoordinateStore = [];
+  
+  if (typeof clearMapMarkers === "function") clearMapMarkers();
+  if (typeof syncUploadUI === "function") syncUploadUI();
+  
   const shpResult = document.getElementById("shpResult");
   const shpClearBtnGroup = document.getElementById("shpClearBtnGroup");
   const shpDropZone = document.getElementById("shpDropZone");

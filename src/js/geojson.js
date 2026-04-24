@@ -10,6 +10,10 @@ let jsonMappingState = {
 };
 
 function handleGeoJsonUpload(event) {
+  if (window.checkExistingData && window.checkExistingData()) {
+    event.target.value = '';
+    return;
+  }
   console.log("📁 GeoJSON file upload triggered", event);
   const file = event.target.files[0];
 
@@ -32,6 +36,7 @@ function handleGeoJsonFile(file) {
         jsonMappingState.data = jsonData;
         jsonMappingState.fileName = file.name;
         processGeoJsonData(jsonData, file.name);
+        if (typeof syncUploadUI === 'function') syncUploadUI();
         hideProcessingOverlay();
       }, 100);
     } catch (error) {
@@ -408,26 +413,20 @@ function showGeoJsonOnMap() {
     return;
   }
 
-  document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.remove("active"));
-  document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
-
-  const mapTab = document.getElementById("map");
-  const mapBtn = document.querySelectorAll(".tab-btn")[3];
-  mapTab.classList.add("active");
-  mapBtn.classList.add("active");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  showTab('map');
 
   setTimeout(() => {
-    if (!map) {
-      initMap();
-    } else {
-      map.invalidateSize();
-    }
+    if (!map) initMap();
+    else map.invalidateSize();
+    
     clearMapMarkers();
 
     // Add Standard GeoJSON layer if available
     if (currentGeoJsonData && currentGeoJsonData.type === "FeatureCollection") {
-      L.geoJSON(currentGeoJsonData, {
+      const renderer = L.canvas({ padding: 0.5 });
+      
+      const geoLayer = L.geoJSON(currentGeoJsonData, {
+        renderer: renderer,
         onEachFeature: function (feature, layer) {
           if (feature.properties) {
             const props = { ...feature.properties };
@@ -439,45 +438,47 @@ function showGeoJsonOnMap() {
           }
         },
         pointToLayer: function (feature, latlng) {
+          const serialNumber = (geoJsonCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
+          
+          if (typeof addDetailedMarker === "function") {
+             addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             return L.layerGroup(); 
+          }
+
           return L.circleMarker(latlng, {
-            radius: 6,
+            radius: 8,
             fillColor: "#667eea",
-            color: "#000",
+            color: "#ffffff",
             weight: 2,
             opacity: 1,
-            fillOpacity: 0.8
+            fillOpacity: 1
           });
+        },
+        style: function(feature) {
+          return {
+            color: "#667eea",
+            weight: 3,
+            opacity: 0.8,
+            fillColor: "#667eea",
+            fillOpacity: 0.2
+          };
         }
       }).addTo(map);
-    }
-
-    // Add individual markers from the coordinate store (handles custom mapped JSON)
-    const totalPoints = geoJsonCoordinateStore.length;
-    const skipVertexMarkers = totalPoints > 500;
-
-    geoJsonCoordinateStore.forEach((coord) => {
-      if (Math.abs(coord.lat) <= 90 && Math.abs(coord.lng) <= 180) {
-        // Only add markers for Points, OR for everything if the dataset is small
-        if (!skipVertexMarkers || coord.geometryType === 'Point' || !coord.geometryType) {
-          addDetailedMarker(coord.lat, coord.lng, coord.properties, coord.coordIndex + 1);
+      
+      // Fit bounds
+      try {
+        const bounds = geoLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [30, 30] });
+        } else if (markers.length > 0) {
+          const group = L.featureGroup(markers);
+          map.fitBounds(group.getBounds(), { padding: [30, 30] });
         }
-      }
-    });
-
-    if (markers.length > 0) {
-      setTimeout(() => {
-        const group = L.featureGroup(markers);
-        map.fitBounds(group.getBounds().pad(0.1));
-      }, 200);
-    } else {
-      // If no markers were added (e.g. only lines/polygons), try to fit to the GeoJSON layer
-      const geoJsonLayers = [];
-      map.eachLayer(l => { if (l instanceof L.GeoJSON) geoJsonLayers.push(l); });
-      if (geoJsonLayers.length > 0) {
-        const bounds = L.featureGroup(geoJsonLayers).getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds.pad(0.1));
+      } catch(e) {
+        console.error("Error fitting bounds:", e);
       }
     }
+    
     updateMapStats();
   }, 300);
 }
@@ -486,6 +487,10 @@ function clearGeoJsonData() {
   currentGeoJsonData = null;
   geoJsonCoordinateStore = [];
   jsonMappingState = { data: null, fileName: "", keys: [], selectedLat: "", selectedLng: "" };
+
+  if (typeof clearMapMarkers === "function") clearMapMarkers();
+  if (typeof syncUploadUI === "function") syncUploadUI();
+
   const fileInput = document.getElementById("geoJsonFile");
   if (fileInput) fileInput.value = "";
   const resultDiv = document.getElementById("geoJsonResult");

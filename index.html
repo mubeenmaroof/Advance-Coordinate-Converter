@@ -131,7 +131,7 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(45%, 1fr)); gap: 25px; align-items: start;">
                     
                     <!-- Excel/CSV Upload -->
-                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <div id="excelCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <div class="drag-drop-zone" id="dropZone" onclick="document.getElementById('excelFile').click()">
                             <h3>📤 Drag & Drop Excel/CSV File</h3>
                             <p>Or click to browse</p>
@@ -146,7 +146,7 @@
                     </div>
 
                     <!-- GeoJSON/JSON Upload -->
-                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <div id="geoJsonCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <div class="drag-drop-zone" id="geoJsonDropZone" onclick="document.getElementById('geoJsonFile').click()">
                             <h3>🗺️ Drag & Drop GeoJSON/JSON File</h3>
                             <p>Or click to browse</p>
@@ -160,7 +160,7 @@
                     </div>
 
                     <!-- KMZ/KML Upload -->
-                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <div id="kmlCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <div class="drag-drop-zone" id="kmlDropZone" onclick="document.getElementById('kmlFile').click()">
                             <h3>📂 Drag & Drop KMZ/KML File</h3>
                             <p>Or click to browse</p>
@@ -174,7 +174,7 @@
                     </div>
 
                     <!-- Shapefile Upload -->
-                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <div id="shpCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <div class="drag-drop-zone" id="shpDropZone" onclick="document.getElementById('shpFile').click()">
                             <h3>📦 Drag & Drop Shapefile Components</h3>
                             <p>Select all: <strong>.shp, .dbf, .shx, .prj</strong></p>
@@ -188,7 +188,7 @@
                     </div>
 
                     <!-- GPX Upload -->
-                    <div class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <div id="gpxCard" class="upload-section-card" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <div class="drag-drop-zone" id="gpxDropZone" onclick="document.getElementById('gpxFile').click()">
                             <h3>🛰️ Drag & Drop GPX File</h3>
                             <p>Waypoints, Tracks & Routes</p>

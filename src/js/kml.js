@@ -2,6 +2,10 @@
 
 function handleKmlUpload(event) {
   console.log("📁 KML file upload triggered", event);
+  if (window.checkExistingData && window.checkExistingData()) {
+    event.target.value = '';
+    return;
+  }
   const file = event.target.files[0];
 
   if (!file) return;
@@ -24,6 +28,7 @@ async function handleKmlFile(file) {
       showProcessingOverlay("Parsing KML Data...");
       setTimeout(() => {
         processKmlData(e.target.result, file.name);
+        if (typeof syncUploadUI === 'function') syncUploadUI();
         hideProcessingOverlay();
       }, 100);
     };
@@ -44,6 +49,7 @@ async function handleKmzFile(file) {
 
     const kmlContent = await kmlFile.async("string");
     processKmlData(kmlContent, file.name);
+    if (typeof syncUploadUI === 'function') syncUploadUI();
     hideProcessingOverlay();
   } catch (error) {
     console.error("❌ Error reading KMZ:", error);
@@ -221,30 +227,20 @@ function showKmlOnMap() {
     return;
   }
 
-  // Switch to Map Tab
-  document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.remove("active"));
-  document.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
-
-  const mapTab = document.getElementById("map");
-  const mapBtn = document.querySelectorAll(".tab-btn")[3]; // Map tab is the 4th button (index 3)
-  mapTab.classList.add("active");
-  mapBtn.classList.add("active");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  showTab('map');
 
   setTimeout(() => {
-    if (typeof initMap === 'function' && !map) {
-      initMap();
-    } else if (map) {
-      map.invalidateSize();
-    }
+    if (!map) initMap();
+    else map.invalidateSize();
 
-    if (typeof clearMapMarkers === 'function') {
-      clearMapMarkers();
-    }
+    clearMapMarkers();
 
     // Add GeoJSON layer from KML
     if (currentKmlData) {
-      L.geoJSON(currentKmlData, {
+      const renderer = L.canvas({ padding: 0.5 });
+      
+      const geoLayer = L.geoJSON(currentKmlData, {
+        renderer: renderer,
         onEachFeature: function (feature, layer) {
           if (feature.properties) {
             const props = { ...feature.properties };
@@ -256,48 +252,47 @@ function showKmlOnMap() {
           }
         },
         pointToLayer: function (feature, latlng) {
+          const serialNumber = (kmlCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
+          
+          if (typeof addDetailedMarker === "function") {
+             addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             return L.layerGroup(); 
+          }
+
           return L.circleMarker(latlng, {
-            radius: 6,
+            radius: 8,
             fillColor: "#28a745",
-            color: "#000",
+            color: "#ffffff",
             weight: 2,
             opacity: 1,
-            fillOpacity: 0.8
+            fillOpacity: 1
           });
+        },
+        style: function(feature) {
+          return {
+            color: "#28a745",
+            weight: 3,
+            opacity: 0.8,
+            fillColor: "#28a745",
+            fillOpacity: 0.2
+          };
         }
       }).addTo(map);
-    }
 
-    // Add individual markers from the coordinate store
-    const totalPoints = kmlCoordinateStore.length;
-    const skipVertexMarkers = totalPoints > 500;
-
-    kmlCoordinateStore.forEach((coord) => {
-      if (Math.abs(coord.lat) <= 90 && Math.abs(coord.lng) <= 180) {
-        if (typeof addDetailedMarker === 'function') {
-          // Only add markers for Points, OR for everything if the dataset is small
-          if (!skipVertexMarkers || coord.geometryType === 'Point' || !coord.geometryType) {
-            addDetailedMarker(coord.lat, coord.lng, coord.properties, coord.coordIndex + 1);
-          }
+      // Fit bounds
+      try {
+        const bounds = geoLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [30, 30] });
+        } else if (markers.length > 0) {
+          const group = L.featureGroup(markers);
+          map.fitBounds(group.getBounds(), { padding: [30, 30] });
         }
-      }
-    });
-
-    if (markers.length > 0) {
-      setTimeout(() => {
-        const group = L.featureGroup(markers);
-        map.fitBounds(group.getBounds().pad(0.1));
-      }, 200);
-    } else {
-      // If no markers were added, try to fit to the GeoJSON layer
-      const geoJsonLayers = [];
-      map.eachLayer(l => { if (l instanceof L.GeoJSON) geoJsonLayers.push(l); });
-      if (geoJsonLayers.length > 0) {
-        const bounds = L.featureGroup(geoJsonLayers).getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds.pad(0.1));
+      } catch(e) {
+        console.error("Error fitting bounds:", e);
       }
     }
-
+    
     if (typeof updateMapStats === 'function') {
       updateMapStats();
     }
@@ -307,6 +302,10 @@ function showKmlOnMap() {
 function clearKmlData() {
   currentKmlData = null;
   kmlCoordinateStore = [];
+  
+  if (typeof clearMapMarkers === "function") clearMapMarkers();
+  if (typeof syncUploadUI === "function") syncUploadUI();
+  
   const fileInput = document.getElementById("kmlFile");
   if (fileInput) fileInput.value = "";
   const resultDiv = document.getElementById("kmlResult");
