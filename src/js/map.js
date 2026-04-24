@@ -1314,7 +1314,7 @@ function zoomToMarker(lat, lng) {
 
 function exportToShp() {
   const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
-  
+
   if (exportMarkers.length === 0 && (!drawnItems || drawnItems.getLayers().length === 0)) {
     if (typeof showToast === 'function') {
       showToast("No data on map to export", "warning");
@@ -1386,11 +1386,11 @@ function exportToShp() {
     if (typeof showProcessingOverlay === 'function') {
       showProcessingOverlay("Generating Shapefile (ZIP)...");
     }
-    
+
     setTimeout(() => {
       if (typeof shpwrite !== 'undefined') {
         console.log("🛠️ Starting SHP export with shpwrite.zip...");
-        
+
         // Use .zip() which returns a Promise in modern versions of shp-write
         const options = {
           folder: 'Coordinate_Export',
@@ -1405,11 +1405,11 @@ function exportToShp() {
         // We'll handle it robustly
         try {
           const result = shpwrite.zip(geojson, options);
-          
+
           const handleZipResult = (zipData) => {
             console.log("📦 ZIP Data received, type:", typeof zipData);
             let blob;
-            
+
             if (typeof zipData === 'string') {
               // Check if it's base64 (shp-write often returns base64)
               try {
@@ -1437,7 +1437,7 @@ function exportToShp() {
               blob = new Blob([zipData], { type: 'application/zip' });
               console.log("⚠️ Using fallback Blob wrapper");
             }
-            
+
             triggerDownload(blob, 'Coordinate_Export.zip');
             if (typeof hideProcessingOverlay === 'function') hideProcessingOverlay();
             if (typeof showToast === 'function') showToast("✓ Shapefile download started", "success");
@@ -2160,7 +2160,7 @@ function createPremiumPopupHTML(lat, lng, rowData, rowIndex) {
             </div>
     `;
   }
-            
+
   html += `
             <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase; font-weight: 800; margin-bottom: 5px; letter-spacing: 0.5px;">DATA ATTRIBUTES</div>
             <div class="popup-scroll-container">
@@ -2632,7 +2632,7 @@ async function exportMapToPDF() {
     // 1. Cinematic Header
     pdf.setFillColor(30, 41, 59); // Slate 800
     pdf.rect(0, 0, pageWidth, 40, "F");
-    
+
     // Header Accent (Gradient look)
     pdf.setFillColor(102, 126, 234); // Indigo
     pdf.rect(0, 36, pageWidth, 4, "F");
@@ -2644,8 +2644,8 @@ async function exportMapToPDF() {
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
-    pdf.text(`PROJECT: Advanced Coordinate Conversion System | ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}`, margin, 28);
-    
+    pdf.text("Advanced Coordinate Conversion System", margin, 28);
+
     // Right side header info
     pdf.setFontSize(9);
     pdf.text(`EXPORT DATE: ${new Date().toLocaleDateString()}`, pageWidth - margin - 50, 18);
@@ -2656,8 +2656,8 @@ async function exportMapToPDF() {
     pdf.setTextColor(30, 41, 59);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
-    pdf.text("📍 SPATIAL CONTEXT", margin, metaY);
-    
+    pdf.text("SPATIAL CONTEXT", margin, metaY);
+
     pdf.setDrawColor(226, 232, 240);
     pdf.setLineWidth(0.3);
     pdf.line(margin, metaY + 2, pageWidth - margin, metaY + 2);
@@ -2665,7 +2665,7 @@ async function exportMapToPDF() {
     // Stats Cards (simulated)
     const cardWidth = 60;
     const cardY = metaY + 10;
-    
+
     // Card 1: Data Source
     pdf.setFillColor(248, 250, 252);
     pdf.roundedRect(margin, cardY, cardWidth, 18, 2, 2, "F");
@@ -2701,7 +2701,7 @@ async function exportMapToPDF() {
     const imgProps = pdf.getImageProperties(imgData);
     const mapAreaWidth = contentWidth;
     const availableHeight = pageHeight - cardY - 45; // Space for image and footer
-    
+
     let finalMapWidth = mapAreaWidth;
     let finalMapHeight = (imgProps.height * finalMapWidth) / imgProps.width;
 
@@ -2717,7 +2717,7 @@ async function exportMapToPDF() {
     pdf.setDrawColor(203, 213, 225);
     pdf.setLineWidth(0.5);
     pdf.rect(mapX - 1, mapY - 1, finalMapWidth + 2, finalMapHeight + 2);
-    
+
     pdf.addImage(imgData, "PNG", mapX, mapY, finalMapWidth, finalMapHeight);
 
     // North Arrow Overlay
@@ -2736,33 +2736,33 @@ async function exportMapToPDF() {
     pdf.rect(0, pageHeight - 12, pageWidth, 12, "F");
     pdf.setTextColor(100, 116, 139);
     pdf.setFontSize(8);
-    pdf.text("© 2026 Advanced Coordinate Conversion System | Professional Output", margin, pageHeight - 5);
+    pdf.text("2026 Advanced Coordinate Conversion System | Professional Output", margin, pageHeight - 5);
     pdf.text("Page 01", pageWidth - margin - 15, pageHeight - 5);
 
     // --- PAGE 2: DATA INVENTORY ---
     if (markers.length > 0) {
       pdf.addPage();
-      
+
       // Secondary Header
       pdf.setFillColor(30, 41, 59);
       pdf.rect(0, 0, pageWidth, 25, "F");
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(16);
       pdf.text("DATA INVENTORY & ATTRIBUTE LIST", margin, 16);
-      
+
       const tableY = 35;
       pdf.setTextColor(30, 41, 59);
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "bold");
       pdf.text("DETAILED LOG", margin, tableY);
-      
+
       pdf.setDrawColor(226, 232, 240);
       pdf.line(margin, tableY + 2, pageWidth - margin, tableY + 2);
 
       // Table Header
       const rowH = 10;
       let currentY = tableY + 8;
-      
+
       pdf.setFillColor(102, 126, 234);
       pdf.rect(margin, currentY, contentWidth, rowH, "F");
       pdf.setTextColor(255, 255, 255);
@@ -2775,41 +2775,41 @@ async function exportMapToPDF() {
       currentY += rowH;
       pdf.setTextColor(30, 41, 59);
       pdf.setFont("helvetica", "normal");
-      
+
       // Show up to 15 items to keep it clean on one page
       const displayCount = Math.min(markers.length, 15);
       for (let i = 0; i < displayCount; i++) {
         const m = markers[i];
         const latlng = m.getLatLng();
         const rowData = (m.markerData && m.markerData.rowData) ? m.markerData.rowData : {};
-        
+
         // Zebra striping
         if (i % 2 === 1) {
           pdf.setFillColor(248, 250, 252);
           pdf.rect(margin, currentY, contentWidth, rowH, "F");
         }
-        
+
         pdf.text(`${i + 1}`, margin + 3, currentY + 6.5);
         pdf.text(`${latlng.lat.toFixed(6)}`, margin + 15, currentY + 6.5);
         pdf.text(`${latlng.lng.toFixed(6)}`, margin + 45, currentY + 6.5);
-        
+
         // Remarks preview
         const remarks = Object.entries(rowData)
           .filter(([k]) => !['lat', 'lng', 'latitude', 'longitude'].includes(k.toLowerCase()))
           .map(([k, v]) => `${k}: ${v}`)
           .join(" | ")
           .substring(0, 110);
-          
+
         pdf.setFontSize(8);
         pdf.text(remarks || "No additional data", margin + 75, currentY + 6.5);
         pdf.setFontSize(9);
-        
+
         currentY += rowH;
-        
+
         // If getting near bottom, stop
         if (currentY > pageHeight - 30) break;
       }
-      
+
       if (markers.length > displayCount) {
         pdf.setFontSize(8);
         pdf.setFont("helvetica", "italic");
@@ -2822,7 +2822,7 @@ async function exportMapToPDF() {
       pdf.rect(0, pageHeight - 12, pageWidth, 12, "F");
       pdf.setTextColor(100, 116, 139);
       pdf.setFontSize(8);
-      pdf.text("© 2026 Advanced Coordinate Conversion System | Professional Output", margin, pageHeight - 5);
+      pdf.text("2026 Advanced Coordinate Conversion System | Professional Output", margin, pageHeight - 5);
       pdf.text("Page 02", pageWidth - margin - 15, pageHeight - 5);
     }
 
@@ -2831,7 +2831,7 @@ async function exportMapToPDF() {
     btn.textContent = originalText;
     btn.disabled = false;
     showToast("✓ Professional PDF Report Generated", "success");
-    
+
   } catch (e) {
     console.error("PDF Export Error:", e);
     alert("Error generating PDF: " + e.message);
