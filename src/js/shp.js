@@ -266,10 +266,13 @@ function renderShpPreview() {
         </p>
       ` : ''}
 
-      <div style="margin-top: 20px; display: flex; gap: 10px;">
-        <button class="btn btn-success" onclick="showShpOnMap()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <span>🗺️</span> View on Map
-        </button>
+      <div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #57c236; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+        <label style="font-weight: 700; font-size: 0.9em; color: #57c236;">Export Format:</label>
+        ${getExportOptionsHTML('shp', 'shpExportFormat')}
+        <div style="display: flex; gap: 10px;">
+          <button class="btn" onclick="downloadShpResults()" style="background: #57c236; color: white; border: none; padding: 10px 20px; font-weight: 700;">📥 Download Results</button>
+          <button class="btn btn-success" onclick="showShpOnMap()" style="padding: 10px 20px; font-weight: 700;">🗺️ Show on Map</button>
+        </div>
       </div>
     </div>
   `;
@@ -412,4 +415,19 @@ function clearShpData() {
       <p>Or click to browse</p>
     `;
   }
+}
+// expose
+window.handleShpUpload = handleShpUpload;
+window.handleShpFiles = handleShpFiles;
+window.showShpOnMap = showShpOnMap;
+window.clearShpData = clearShpData;
+window.downloadShpResults = downloadShpResults;
+
+function downloadShpResults() {
+  if (!shpCoordinateStore || shpCoordinateStore.length === 0) {
+    alert("Please load valid Shapefile data first.");
+    return;
+  }
+  const format = document.getElementById("shpExportFormat")?.value || "csv";
+  handleGenericExport(format, shpCoordinateStore, "shpFile");
 }

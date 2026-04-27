@@ -213,8 +213,13 @@ function renderKmlSuccessUI(fileName, count) {
       </table>
     </div>
 
-    <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #28a745; display: flex; gap: 10px; flex-wrap: wrap;">
-      <button class="btn btn-success" onclick="showKmlOnMap()" style="padding: 10px 20px; font-weight: 700; flex: 1;">🗺️ Show on Map</button>
+    <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #28a745; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: center;">
+      <label style="font-weight: 700; font-size: 0.9em; color: #28a745;">Export Format:</label>
+      ${getExportOptionsHTML(isKmz ? 'kmz' : 'kml', 'kmlExportFormat')}
+      <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="downloadKmlResults()" style="background: #28a745; color: white; border: none; padding: 10px 20px; font-weight: 700;">📥 Download Results</button>
+        <button class="btn btn-success" onclick="showKmlOnMap()" style="padding: 10px 20px; font-weight: 700;">🗺️ Show on Map</button>
+      </div>
     </div>
   </div>`;
 
@@ -319,3 +324,13 @@ window.handleKmlUpload = handleKmlUpload;
 window.handleKmlFile = handleKmlFile;
 window.showKmlOnMap = showKmlOnMap;
 window.clearKmlData = clearKmlData;
+window.downloadKmlResults = downloadKmlResults;
+
+function downloadKmlResults() {
+  if (!kmlCoordinateStore || kmlCoordinateStore.length === 0) {
+    alert("Please load valid KML/KMZ data first.");
+    return;
+  }
+  const format = document.getElementById("kmlExportFormat")?.value || "csv";
+  handleGenericExport(format, kmlCoordinateStore, "kmlFile");
+}

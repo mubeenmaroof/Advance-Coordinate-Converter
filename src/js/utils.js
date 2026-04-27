@@ -154,6 +154,123 @@ function validateFileSize(file, maxSizeMB = 40) {
   return true;
 }
 
+// Export UI and Logic Helpers
+function getExportOptionsHTML(excludeFormat, selectId) {
+  const options = [
+    { value: 'csv', label: 'CSV - Light & Faster' },
+    { value: 'xlsx', label: 'Excel (XLSX) - High Quality' },
+    { value: 'geojson', label: 'GeoJSON - Standard GIS Format' },
+    { value: 'json', label: 'JSON - ArcMap Compatible' },
+    { value: 'kml', label: 'KML - Google Earth' },
+    { value: 'kmz', label: 'KMZ - Compressed KML' },
+    { value: 'shp', label: 'Shapefile (ZIP) - Desktop GIS' }
+  ];
+
+  let html = `<select id="${selectId}" style="padding: 6px 12px; border-radius: 4px; border: 1px solid #ccc; font-weight: 600;">`;
+  options.forEach(opt => {
+    if (opt.value !== excludeFormat) {
+      html += `<option value="${opt.value}">${opt.label}</option>`;
+    }
+  });
+  html += `</select>`;
+  return html;
+}
+
+function handleGenericExport(format, dataStore, inputId) {
+  if (!dataStore || dataStore.length === 0) {
+    alert("No data available to export.");
+    return;
+  }
+
+  // Create fake markers for map export functions
+  const fakeMarkers = dataStore.map((item, index) => {
+    const properties = item.rowData || item.properties || {};
+    return {
+      getLatLng: () => ({ lat: item.lat, lng: item.lng }),
+      markerData: {
+        rowData: properties,
+        rowIndex: item.rowIndex || index + 1
+      },
+      toGeoJSON: () => ({
+         type: "Feature",
+         geometry: { type: "Point", coordinates: [item.lng, item.lat] },
+         properties: properties
+      })
+    };
+  });
+
+  const finalFileName = window.generateExportFileName ? window.generateExportFileName(inputId, "Converted", format) : `export_${new Date().getTime()}.${format}`;
+
+  if (format === 'csv' || format === 'xlsx') {
+    if (!window.initWorker) {
+      alert("Export worker not available.");
+      return;
+    }
+    showProcessingOverlay(`Generating ${format.toUpperCase()} Results...`);
+    const worker = window.initWorker();
+    
+    let allKeys = new Set();
+    fakeMarkers.forEach(m => {
+      Object.keys(m.markerData.rowData).forEach(k => allKeys.add(k));
+    });
+    const headers = ["Latitude", "Longitude", ...Array.from(allKeys)];
+    
+    const aoaData = [headers];
+    fakeMarkers.forEach(m => {
+      const row = [m.getLatLng().lat, m.getLatLng().lng];
+      Array.from(allKeys).forEach(k => {
+        row.push(m.markerData.rowData[k] !== undefined ? m.markerData.rowData[k] : "");
+      });
+      aoaData.push(row);
+    });
+
+    if (format === 'csv') {
+      worker.postMessage({
+        type: 'excel_export',
+        payload: {
+          taskType: 'excel_upload_export',
+          bookType: 'csv',
+          taskPayload: { data: aoaData },
+          fileName: finalFileName
+        }
+      });
+    } else {
+      const colWidths = headers.map(() => ({ wch: 20 }));
+      worker.postMessage({
+        type: 'excel_export',
+        payload: {
+          taskType: 'excel_upload_export',
+          bookType: 'xlsx',
+          taskPayload: { data: aoaData },
+          sheetName: "Exported Data",
+          fileName: finalFileName,
+          styles: {
+            colWidths: colWidths,
+            freeze: { xSplit: 0, ySplit: 1 },
+            headerStyle: {
+              fill: { fgColor: { rgb: "FF667eea" } },
+              font: { bold: true, color: { rgb: "FFFFFFFF" } },
+              alignment: { horizontal: "center", vertical: "center" }
+            }
+          }
+        }
+      });
+    }
+  } else if (format === 'geojson' && window.exportToGeoJSON) {
+    window.exportToGeoJSON(fakeMarkers, finalFileName);
+  } else if (format === 'json' && window.exportToJSON) {
+    window.exportToJSON(fakeMarkers, finalFileName);
+  } else if (format === 'kml' && window.exportToKML) {
+    window.exportToKML(fakeMarkers, finalFileName);
+  } else if (format === 'kmz' && window.exportToKMZ) {
+    window.exportToKMZ(fakeMarkers, finalFileName);
+  } else if (format === 'shp' && window.exportToShp) {
+    window.exportToShp(fakeMarkers, finalFileName);
+  } else {
+    alert("Unsupported export format or export function missing.");
+  }
+}
+
 // expose to global for older inline handlers
 window.parseDMS = parseDMS;
 window.formatDMS = formatDMS;
@@ -163,3 +280,5 @@ window.pairCoordinates = pairCoordinates;
 window.normalizeCoordinates = normalizeCoordinates;
 window.parseCSV = parseCSV;
 window.validateFileSize = validateFileSize;
+window.getExportOptionsHTML = getExportOptionsHTML;
+window.handleGenericExport = handleGenericExport;

@@ -156,10 +156,13 @@ function renderGpxSuccessUI(fileName, count) {
         </p>
       ` : ''}
 
-      <div style="margin-top: 20px;">
-        <button class="btn btn-primary" onclick="showGpxOnMap()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <span>🗺️</span> View on Map
-        </button>
+      <div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #ff416c; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+        <label style="font-weight: 700; font-size: 0.9em; color: #ff416c;">Export Format:</label>
+        ${getExportOptionsHTML('gpx', 'gpxExportFormat')}
+        <div style="display: flex; gap: 10px;">
+          <button class="btn" onclick="downloadGpxResults()" style="background: #ff416c; color: white; border: none; padding: 10px 20px; font-weight: 700;">📥 Download Results</button>
+          <button class="btn btn-primary" onclick="showGpxOnMap()" style="padding: 10px 20px; font-weight: 700;">📍 Show on Map</button>
+        </div>
       </div>
     </div>
   `;
@@ -250,4 +253,19 @@ function clearGpxData() {
   document.getElementById("gpxResult").innerHTML = "";
   document.getElementById("gpxClearBtnGroup").style.display = "none";
   document.getElementById("gpxFile").value = "";
+}
+// expose
+window.handleGpxUpload = handleGpxUpload;
+window.handleGpxFile = handleGpxFile;
+window.showGpxOnMap = showGpxOnMap;
+window.clearGpxData = clearGpxData;
+window.downloadGpxResults = downloadGpxResults;
+
+function downloadGpxResults() {
+  if (!gpxCoordinateStore || gpxCoordinateStore.length === 0) {
+    alert("Please load valid GPX data first.");
+    return;
+  }
+  const format = document.getElementById("gpxExportFormat")?.value || "csv";
+  handleGenericExport(format, gpxCoordinateStore, "gpxFile");
 }

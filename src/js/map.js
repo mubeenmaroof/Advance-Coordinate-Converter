@@ -1312,8 +1312,8 @@ function zoomToMarker(lat, lng) {
   }, 2500);
 }
 
-function exportToShp() {
-  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+function exportToShp(customMarkers, customFileName) {
+  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
 
   if (exportMarkers.length === 0 && (!drawnItems || drawnItems.getLayers().length === 0)) {
     if (typeof showToast === 'function') {
@@ -2277,8 +2277,8 @@ function searchLocation() {
   addMarkerFromInput(query);
 }
 
-function exportToKML() {
-  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+function exportToKML(customMarkers, customFileName) {
+  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
   if (exportMarkers.length === 0) {
     alert("No markers to export");
     return;
@@ -2329,9 +2329,72 @@ function exportToKML() {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "export_kml.kml";
+  a.download = customFileName || "export_kml.kml";
   a.click();
   window.URL.revokeObjectURL(url);
+}
+
+function exportToKMZ(customMarkers, customFileName) {
+  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
+  if (exportMarkers.length === 0) {
+    alert("No markers to export");
+    return;
+  }
+  let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
+  kml += "<Document>\n";
+  kml += "<name>Exported Coordinates</name>\n";
+  kml += "<description>Coordinates exported from Advanced Coordinate Converter</description>\n";
+  exportMarkers.forEach((marker, index) => {
+    const latlng = marker.getLatLng();
+    const markerData = marker.markerData || {};
+    const rowData = markerData.rowData || {};
+    kml += "<Placemark>\n";
+    kml += `<name>Point ${index + 1}</name>\n`;
+    let description = "<![CDATA[\n";
+    description += `<h3>Point ${index + 1}</h3>\n`;
+    description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(latlng.lat).toFixed(6)}<br/>Longitude: ${parseFloat(latlng.lng).toFixed(6)}</p>\n`;
+    if (Object.keys(rowData).length > 0) {
+      description += "<p><strong>Additional Data:</strong></p>\n";
+      description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
+      for (const [key, value] of Object.entries(rowData)) {
+        if (value !== null && value !== undefined && value !== "") {
+          description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${value}</td></tr>\n`;
+        }
+      }
+      description += "</table>\n";
+    }
+    description += "]]>\n";
+    kml += `<description>${description}</description>\n`;
+    kml += "<Point>\n";
+    kml += `<coordinates>${parseFloat(latlng.lng).toFixed(6)},${parseFloat(latlng.lat).toFixed(6)},0</coordinates>\n`;
+    kml += "</Point>\n";
+    kml += "</Placemark>\n";
+  });
+  kml += "</Document>\n";
+  kml += "</kml>";
+  
+  if (typeof JSZip === 'undefined') {
+    alert("JSZip library not found for KMZ export");
+    return;
+  }
+  
+  showProcessingOverlay("Generating KMZ...");
+  const zip = new JSZip();
+  zip.file("doc.kml", kml);
+  zip.generateAsync({type:"blob"}).then(function(content) {
+    const url = window.URL.createObjectURL(content);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = customFileName || "export_kmz.kmz";
+    a.click();
+    window.URL.revokeObjectURL(url);
+    hideProcessingOverlay();
+  }).catch(err => {
+    console.error("KMZ Export Error:", err);
+    hideProcessingOverlay();
+    alert("Error generating KMZ");
+  });
 }
 
 // ==== ADVANCED GIS CAPABILITIES ====
@@ -2455,8 +2518,8 @@ function connectPoints() {
   }
 }
 
-function exportToGeoJSON() {
-  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+function exportToGeoJSON(customMarkers, customFileName) {
+  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
   if (exportMarkers.length === 0) {
     alert("No markers to export.");
     return;
@@ -2487,13 +2550,13 @@ function exportToGeoJSON() {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "export_geojson.geojson";
+  a.download = customFileName || "export_geojson.geojson";
   a.click();
   window.URL.revokeObjectURL(url);
 }
 
-function exportToJSON() {
-  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+function exportToJSON(customMarkers, customFileName) {
+  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
   if (exportMarkers.length === 0) {
     alert("No markers to export.");
     return;
@@ -2586,7 +2649,7 @@ function exportToJSON() {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "export_json.json";
+  a.download = customFileName || "export_json.json";
   a.click();
   window.URL.revokeObjectURL(url);
 }

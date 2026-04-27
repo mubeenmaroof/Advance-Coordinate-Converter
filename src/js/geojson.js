@@ -336,10 +336,13 @@ function renderJsonSuccessUI(fileName, format, count) {
         </p>
       ` : ''}
 
-      <div style="margin-top: 20px; display: flex; gap: 10px;">
-        <button class="btn btn-primary" onclick="showGeoJsonOnMap()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <span>🗺️</span> View on Map
-        </button>
+      <div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #667eea; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+        <label style="font-weight: 700; font-size: 0.9em; color: #667eea;">Export Format:</label>
+        ${getExportOptionsHTML(fileName.endsWith('.json') ? 'json' : 'geojson', 'geoJsonExportFormat')}
+        <div style="display: flex; gap: 10px;">
+          <button class="btn" onclick="downloadGeoJsonResults()" style="background: #667eea; color: white; border: none; padding: 10px 20px; font-weight: 700;">📥 Download Results</button>
+          <button class="btn btn-primary" onclick="showGeoJsonOnMap()" style="padding: 10px 20px; font-weight: 700;">📍 Show on Map</button>
+        </div>
       </div>
     </div>
   `;
@@ -506,3 +509,13 @@ window.showGeoJsonOnMap = showGeoJsonOnMap;
 window.clearGeoJsonData = clearGeoJsonData;
 window.applyJsonKeyMapping = applyJsonKeyMapping;
 window.discoverAndShowMapping = discoverAndShowMapping;
+window.downloadGeoJsonResults = downloadGeoJsonResults;
+
+function downloadGeoJsonResults() {
+  if (!geoJsonCoordinateStore || geoJsonCoordinateStore.length === 0) {
+    alert("Please load valid JSON/GeoJSON data first.");
+    return;
+  }
+  const format = document.getElementById("geoJsonExportFormat")?.value || "csv";
+  handleGenericExport(format, geoJsonCoordinateStore, "geoJsonFile");
+}

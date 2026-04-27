@@ -34,6 +34,8 @@ function handleFile(file) {
   reader.onload = function (e) {
     try {
       showProcessingOverlay("Reading File...");
+      window.excelFileExt = file.name.split('.').pop().toLowerCase();
+      if (window.excelFileExt === 'xls') window.excelFileExt = 'xlsx'; // treat xls as xlsx for export options
       setTimeout(() => {
         console.log("📖 File loaded, processing...");
         let data;
@@ -211,10 +213,7 @@ function displayColumnSelection(headers, sheetName = null) {
   html += "</div>";
   html += '<div style="margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #667eea; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">';
   html += '    <label style="font-weight: 700; font-size: 0.9em; color: #667eea;">Export Format:</label>';
-  html += '    <select id="excelExportFormat" style="padding: 6px 12px; border-radius: 4px; border: 1px solid #ccc; font-weight: 600;">';
-  html += '        <option value="xlsx">Excel (XLSX) - High Quality</option>';
-  html += '        <option value="csv">CSV - Light & Faster</option>';
-  html += '    </select>';
+  html += `    ${getExportOptionsHTML(window.excelFileExt || 'xlsx', 'excelExportFormat')}`;
   html += '    <div style="display: flex; gap: 10px;">';
   html += '        <button class="btn btn-success" onclick="convertExcelData()" style="padding: 10px 20px; font-weight: 700;">🔄 Convert Data</button>';
   html += '        <button class="btn" onclick="downloadExcelResults()" style="background: #667eea; color: white; border: none; padding: 10px 20px; font-weight: 700;">📥 Download Results</button>';
@@ -380,60 +379,13 @@ function displayConvertedData(data, convertedColumns) {
 }
 
 function downloadExcelResults() {
-  if (!window.convertedExcelData) {
-    alert("Please convert data first");
+  if (!window.convertedExcelData || !coordinateDataStore || coordinateDataStore.length === 0) {
+    alert("Please convert data first and ensure coordinates are present.");
     return;
   }
 
-  const format = document.getElementById("excelExportFormat")?.value || "xlsx";
-  const finalFileName = window.generateExportFileName("excelFile", "Converted", format);
-
-  showProcessingOverlay(`Generating ${format.toUpperCase()} Results...`);
-  const worker = initWorker();
-
-  const data = window.convertedExcelData;
-  const colWidths = data[0].map(() => ({ wch: 20 }));
-
-  if (format === 'csv') {
-    worker.postMessage({
-      type: 'excel_export',
-      payload: {
-        taskType: 'excel_upload_export',
-        bookType: 'csv',
-        taskPayload: {
-          data: data
-        },
-        fileName: finalFileName
-      }
-    });
-    return;
-  }
-
-  // For XLSX, we can still use the worker but the summary sheet is complex.
-  // We'll pass the summary AOA to the worker if we update the worker to handle multiple sheets.
-  // For now, let's just export the main data sheet via worker for performance.
-
-  worker.postMessage({
-    type: 'excel_export',
-    payload: {
-      taskType: 'excel_upload_export',
-      bookType: 'xlsx',
-      taskPayload: {
-        data: data
-      },
-      sheetName: "Converted Coordinates",
-      fileName: finalFileName,
-      styles: {
-        colWidths: colWidths,
-        freeze: { xSplit: 0, ySplit: 1 },
-        headerStyle: {
-          fill: { fgColor: { rgb: "FF667eea" } },
-          font: { bold: true, color: { rgb: "FFFFFFFF" } },
-          alignment: { horizontal: "center", vertical: "center" },
-        }
-      }
-    }
-  });
+  const format = document.getElementById("excelExportFormat")?.value || "csv";
+  handleGenericExport(format, coordinateDataStore, "excelFile");
 }
 
 function showExcelOnMap() {
