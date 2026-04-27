@@ -1038,10 +1038,12 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
             </div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
                 <button title="Copy coordinates" onclick="copySelectedCoordinates()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📋 Copy</button>
-                <button title="Export as CSV" onclick="exportSelectedAsCSV()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 CSV</button>
+                <button title="Export as CSV" onclick="exportToCSV()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 CSV</button>
+                <button title="Export as Excel" onclick="exportToExcel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 Excel</button>
                 <button title="Export as GeoJSON" onclick="exportToGeoJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">🌍 GeoJSON</button>
                 <button title="Export as JSON" onclick="exportToJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📄 JSON</button>
                 <button title="Export as KML" onclick="exportToKML()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📍 KML</button>
+                <button title="Export as KMZ" onclick="exportToKMZ()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">🗜️ KMZ</button>
                 <button title="Export as SHP" onclick="exportToShp()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📦 SHP</button>
                 <button title="Minimize/Maximize" id="btnMinimizeSelection" onclick="toggleMinimizeSelection()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">−</button>
                 <button title="Close panel" onclick="closeSelectedPanel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">✕</button>
@@ -3318,3 +3320,103 @@ style.innerHTML = `
     }
   `;
 document.head.appendChild(style);
+
+// Export Map Data to Excel and CSV
+function exportToExcel() {
+  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+  if (exportMarkers.length === 0) {
+    if (typeof showToast === 'function') {
+      showToast("No data on map to export", "warning");
+    } else {
+      alert("No data on map to export");
+    }
+    return;
+  }
+  handleMapExcelCSVExport(exportMarkers, 'xlsx');
+}
+
+function exportToCSV() {
+  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+  if (exportMarkers.length === 0) {
+    if (typeof showToast === 'function') {
+      showToast("No data on map to export", "warning");
+    } else {
+      alert("No data on map to export");
+    }
+    return;
+  }
+  handleMapExcelCSVExport(exportMarkers, 'csv');
+}
+
+function handleMapExcelCSVExport(exportMarkers, format) {
+  if (!window.initWorker) {
+    alert("Export worker not available.");
+    return;
+  }
+
+  showProcessingOverlay(`Generating ${format.toUpperCase()} Results...`);
+  const worker = window.initWorker();
+  
+  let allKeys = new Set();
+  exportMarkers.forEach(m => {
+    if (m.markerData && m.markerData.rowData) {
+      Object.keys(m.markerData.rowData).forEach(k => allKeys.add(k));
+    }
+  });
+  
+  const headers = ["Latitude", "Longitude", ...Array.from(allKeys)];
+  
+  const aoaData = [headers];
+  exportMarkers.forEach(m => {
+    let lat = null, lng = null;
+    if (typeof m.getLatLng === 'function') {
+      const latlng = m.getLatLng();
+      lat = latlng.lat;
+      lng = latlng.lng;
+    }
+    
+    if (lat === null || lng === null) return;
+    
+    const row = [lat, lng];
+    const rowData = (m.markerData && m.markerData.rowData) ? m.markerData.rowData : {};
+    Array.from(allKeys).forEach(k => {
+      row.push(rowData[k] !== undefined ? rowData[k] : "");
+    });
+    aoaData.push(row);
+  });
+
+  const finalFileName = window.generateExportFileName ? window.generateExportFileName(null, "MapExport", format) : `map_export.${format}`;
+
+  if (format === 'csv') {
+    worker.postMessage({
+      type: 'excel_export',
+      payload: {
+        taskType: 'excel_upload_export',
+        bookType: 'csv',
+        taskPayload: { data: aoaData },
+        fileName: finalFileName
+      }
+    });
+  } else {
+    const colWidths = headers.map(() => ({ wch: 20 }));
+    worker.postMessage({
+      type: 'excel_export',
+      payload: {
+        taskType: 'excel_upload_export',
+        bookType: 'xlsx',
+        taskPayload: { data: aoaData },
+        sheetName: "Map Export",
+        fileName: finalFileName,
+        styles: {
+          colWidths: colWidths,
+          freeze: { xSplit: 0, ySplit: 1 },
+          headerStyle: {
+            fill: { fgColor: { rgb: "FF667eea" } },
+            font: { bold: true, color: { rgb: "FFFFFFFF" } },
+            alignment: { horizontal: "center", vertical: "center" }
+          }
+        }
+      }
+    });
+  }
+}
