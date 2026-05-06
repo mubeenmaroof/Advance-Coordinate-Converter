@@ -439,12 +439,17 @@ function showGeoJsonOnMap() {
             const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' });
           }
+          // Add individual features to drawnItems so they can be exported
+          if (drawnItems && !(layer instanceof L.Marker)) {
+            drawnItems.addLayer(layer);
+          }
         },
         pointToLayer: function (feature, latlng) {
           const serialNumber = (geoJsonCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
           
           if (typeof addDetailedMarker === "function") {
-             addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             if (marker) importedLayers.addLayer(marker);
              return L.layerGroup(); 
           }
 
@@ -466,7 +471,7 @@ function showGeoJsonOnMap() {
             fillOpacity: 0.2
           };
         }
-      }).addTo(map);
+      }).addTo(importedLayers);
       
       // Fit bounds
       try {

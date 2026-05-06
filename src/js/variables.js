@@ -113,5 +113,8 @@ let kmlCoordinateStore = [];
 let currentShpData = null;
 let shpCoordinateStore = [];
 
+// Global Layer Groups for GIS Export/Management
+let importedLayers = null; // Will be initialized as L.layerGroup() in map.js
+
 
 // the following DOM listeners are moved to their respective modules (dedupe/split/comparison etc)

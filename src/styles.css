@@ -236,29 +236,31 @@ body.dark-mode .input-group textarea {
   border-left: 4px solid var(--primary);
 }
 
-body.dark-mode .result {
-  background: #3a3a4e;
+.result-card {
+  margin-top: 20px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  animation: fadeIn 0.5s ease-out;
 }
 
-.result h3 {
-  margin-bottom: 10px;
+body.dark-mode .result-card {
+  background: #2d2d3e;
+  border-color: #4a4a5e;
+}
+
+.result-card h4 {
   color: var(--primary);
-}
-
-.result-value {
-  font-size: 1.2em;
-  font-weight: 600;
-  color: #333;
-  word-break: break-all;
-}
-
-body.dark-mode .result-value {
-  color: #e0e0e0;
+  margin-bottom: 15px;
 }
 
 .table-container {
   overflow-x: auto;
   margin-top: 20px;
+  border-radius: 8px;
+  border: 1px solid #edf2f7;
 }
 
 table {

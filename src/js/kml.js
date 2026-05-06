@@ -59,6 +59,39 @@ async function handleKmzFile(file) {
   }
 }
 
+/**
+ * Extracts key-value pairs from an HTML table (common in KML descriptions)
+ */
+function extractPropertiesFromHtml(html) {
+  if (!html || typeof html !== 'string' || !html.includes('<table')) return {};
+  const props = {};
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    // Look for standard GIS attribute tables (usually 2 columns: Name/Key and Value)
+    const rows = doc.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('td, th');
+      if (cells.length >= 2) {
+        // Use the first cell as key, second as value
+        let key = cells[0].textContent.trim().replace(/:$/, '');
+        const val = cells[1].textContent.trim();
+        
+        // Clean up key for GIS compatibility
+        if (key && val !== undefined && val !== null) {
+          // If key is empty or just whitespace, skip
+          if (key.length > 0) {
+            props[key] = val;
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.warn("Could not parse HTML properties from description", e);
+  }
+  return props;
+}
+
 function processKmlData(kmlString, fileName) {
   const resultDiv = document.getElementById("kmlResult");
 
@@ -73,6 +106,23 @@ function processKmlData(kmlString, fileName) {
     }
 
     const geoJsonData = toGeoJSON.kml(kmlDom);
+    
+    // ENHANCEMENT: Extract attributes from HTML description tables if present
+    if (geoJsonData.features) {
+      geoJsonData.features.forEach(feature => {
+        if (feature.properties && feature.properties.description) {
+          const htmlProps = extractPropertiesFromHtml(feature.properties.description);
+          // Merge extracted properties into feature.properties
+          // We don't overwrite existing properties to be safe
+          for (const [key, val] of Object.entries(htmlProps)) {
+            if (feature.properties[key] === undefined) {
+              feature.properties[key] = val;
+            }
+          }
+        }
+      });
+    }
+
     currentKmlData = geoJsonData;
     kmlCoordinateStore = extractCoordinatesFromKmlGeoJson(geoJsonData);
 
@@ -255,12 +305,17 @@ function showKmlOnMap() {
             const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' });
           }
+          // Add non-point features to drawnItems for export
+          if (drawnItems && !(layer instanceof L.Marker)) {
+            drawnItems.addLayer(layer);
+          }
         },
         pointToLayer: function (feature, latlng) {
           const serialNumber = (kmlCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
           
           if (typeof addDetailedMarker === "function") {
-             addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             if (marker) importedLayers.addLayer(marker);
              return L.layerGroup(); 
           }
 

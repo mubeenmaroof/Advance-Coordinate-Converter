@@ -182,7 +182,46 @@ function handleGenericExport(format, dataStore, inputId) {
     return;
   }
 
-  // Create fake markers for map export functions
+  const finalFileName = window.generateExportFileName ? window.generateExportFileName(inputId, "Converted", format) : `export_${new Date().getTime()}.${format}`;
+
+  // PRIORITY 1: For spatial formats (GeoJSON, KML, SHP), try to use the original full data if available
+  // This preserves complex geometries (Lines, Polygons) which are otherwise flattened in dataStore
+  const spatialFormats = ['geojson', 'json', 'kml', 'kmz', 'shp'];
+  if (spatialFormats.includes(format)) {
+     let sourceData = null;
+     if (inputId === "geoJsonFile") sourceData = currentGeoJsonData;
+     else if (inputId === "kmlFile") sourceData = currentKmlData;
+     else if (inputId === "shpFile") sourceData = currentShpData;
+     else if (inputId === "gpxFile") sourceData = currentGpxData;
+
+     if (sourceData) {
+        console.log(`🚀 Using original spatial data for ${format.toUpperCase()} export to preserve geometries.`);
+        if (format === 'geojson' && window.exportToGeoJSON) {
+           const blob = new Blob([JSON.stringify(sourceData, null, 2)], { type: "application/geo+json" });
+           const url = window.URL.createObjectURL(blob);
+           const a = document.createElement("a");
+           a.href = url; a.download = finalFileName; a.click();
+           window.URL.revokeObjectURL(url);
+           return;
+        } else if (format === 'kml' && window.exportToKML) {
+           // We'll pass a special object that exportToKML can recognize, or just wrap it
+           // For now, let's update exportToKML to handle FeatureCollection
+           window.exportToKML(sourceData, finalFileName);
+           return;
+        } else if (format === 'kmz' && window.exportToKMZ) {
+           window.exportToKMZ(sourceData, finalFileName);
+           return;
+        } else if (format === 'shp' && window.exportToShp) {
+           window.exportToShp(sourceData, finalFileName);
+           return;
+        } else if (format === 'json' && window.exportToJSON) {
+           window.exportToJSON(sourceData, finalFileName);
+           return;
+        }
+     }
+  }
+
+  // PRIORITY 2: Use the flattened dataStore (standard behavior)
   const fakeMarkers = dataStore.map((item, index) => {
     const properties = item.rowData || item.properties || {};
     return {
@@ -198,8 +237,6 @@ function handleGenericExport(format, dataStore, inputId) {
       })
     };
   });
-
-  const finalFileName = window.generateExportFileName ? window.generateExportFileName(inputId, "Converted", format) : `export_${new Date().getTime()}.${format}`;
 
   if (format === 'csv' || format === 'xlsx') {
     if (!window.initWorker) {

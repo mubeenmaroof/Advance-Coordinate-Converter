@@ -1,4 +1,4 @@
-// map-related logic and helpers
+﻿// map-related logic and helpers
 
 function initMap() {
   // Check if mapContainer exists
@@ -66,6 +66,9 @@ function initMap() {
     // Initialize Convex Hull Layer
     convexHullLayer = new L.FeatureGroup();
     map.addLayer(convexHullLayer);
+
+    // Initialize Global Imported Layers Group
+    importedLayers = L.layerGroup().addTo(map);
 
     // Initialize MarkerCluster Group
     markerClusterGroup = L.markerClusterGroup({
@@ -1314,10 +1317,97 @@ function zoomToMarker(lat, lng) {
   }, 2500);
 }
 
-function exportToShp(customMarkers, customFileName) {
-  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
+/**
+ * Centralized helper: collect all GeoJSON features from every map data source.
+ * Sources checked (in order):
+ *  1. Explicit dataSource (FeatureCollection or marker array)
+ *  2. selectedMarkers or all markers
+ *  3. drawnItems layers
+ *  4. importedLayers layers
+ *  5. In-memory data stores (currentKmlData, currentGeoJsonData, currentShpData) as fallback
+ */
+function collectAllMapFeatures(dataSource) {
+  let features = [];
 
-  if (exportMarkers.length === 0 && (!drawnItems || drawnItems.getLayers().length === 0)) {
+  if (dataSource && dataSource.type === "FeatureCollection") {
+    return dataSource.features.slice(); // direct export
+  }
+
+  const sourceMarkers = dataSource
+    ? (Array.isArray(dataSource) ? dataSource : [])
+    : (selectedMarkers.length > 0 ? selectedMarkers : markers);
+
+  // 1. Markers
+  sourceMarkers.forEach(m => {
+    if (typeof m.getLatLng !== 'function') return;
+    let props = {};
+    if (m.markerData && m.markerData.rowData) props = { ...m.markerData.rowData };
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [m.getLatLng().lng, m.getLatLng().lat] },
+      properties: props
+    });
+  });
+
+  // 2. Drawn items
+  if (drawnItems) {
+    drawnItems.eachLayer(layer => {
+      if (sourceMarkers.includes(layer)) return;
+      if (typeof layer.toGeoJSON === 'function') {
+        const gj = layer.toGeoJSON();
+        if (gj.type === "FeatureCollection" && gj.features) {
+          features = features.concat(gj.features);
+        } else {
+          features.push(gj);
+        }
+      }
+    });
+  }
+
+  // 3. Imported layers
+  if (importedLayers) {
+    importedLayers.eachLayer(layer => {
+      if (sourceMarkers.includes(layer)) return;
+      if (drawnItems && drawnItems.hasLayer(layer)) return;
+      if (typeof layer.toGeoJSON === 'function') {
+        const gj = layer.toGeoJSON();
+        if (gj.type === "FeatureCollection" && gj.features) {
+          features = features.concat(gj.features);
+        } else {
+          features.push(gj);
+        }
+      }
+    });
+  }
+
+  // 4. Fallback: raw in-memory data stores (if nothing collected yet from live map)
+  if (features.length === 0) {
+    const stores = [
+      typeof currentKmlData !== 'undefined' ? currentKmlData : null,
+      typeof currentGeoJsonData !== 'undefined' ? currentGeoJsonData : null,
+      typeof currentShpData !== 'undefined' ? currentShpData : null,
+    ];
+    stores.forEach(store => {
+      if (!store) return;
+      const collection = Array.isArray(store) ? store : [store];
+      collection.forEach(fc => {
+        if (fc && fc.type === "FeatureCollection" && fc.features) {
+          features = features.concat(fc.features);
+        } else if (fc && fc.type === "Feature") {
+          features.push(fc);
+        }
+      });
+    });
+  }
+
+  return features;
+}
+
+function exportToShp(dataSource, customFileName) {
+  // Collect all features from every source (live map + data store fallback)
+  const rawFeatures = collectAllMapFeatures(dataSource);
+
+  if (rawFeatures.length === 0) {
     if (typeof showToast === 'function') {
       showToast("No data on map to export", "warning");
     } else {
@@ -1326,58 +1416,21 @@ function exportToShp(customMarkers, customFileName) {
     return;
   }
 
-  const features = [];
-
-  // Add markers
-  exportMarkers.forEach(marker => {
-    if (marker.toGeoJSON) {
-      const geojson = marker.toGeoJSON();
-      // Ensure properties are flat for DBF and have NO nested objects
-      const flatProps = {};
-      if (marker.markerData && marker.markerData.rowData) {
-        Object.keys(marker.markerData.rowData).forEach(key => {
-          const val = marker.markerData.rowData[key];
-          // DBF only supports strings/numbers, not objects/arrays
-          if (typeof val === 'object' && val !== null) {
-            flatProps[key] = JSON.stringify(val);
-          } else {
-            flatProps[key] = val;
-          }
-        });
-        if (marker.markerData.rowIndex) {
-          flatProps.ID = marker.markerData.rowIndex;
-        }
-      }
-      geojson.properties = flatProps;
-      features.push(geojson);
+  // Flatten properties for DBF compatibility (max 10 char keys, no objects)
+  const features = rawFeatures.map(f => {
+    const feat = JSON.parse(JSON.stringify(f));
+    const flatProps = {};
+    if (feat.properties) {
+      Object.keys(feat.properties).forEach(key => {
+        const val = feat.properties[key];
+        let cleanKey = key.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 10);
+        flatProps[cleanKey] = (val !== null && typeof val === 'object') ? JSON.stringify(val) : val;
+      });
     }
+    feat.properties = flatProps;
+    return feat;
   });
 
-  // Add drawn items
-  if (drawnItems) {
-    drawnItems.eachLayer(layer => {
-      if (typeof layer.toGeoJSON === 'function') {
-        const geojson = layer.toGeoJSON();
-        // Ensure properties are defined and flat
-        geojson.properties = geojson.properties || {};
-        // Add some basic info if it's a circle
-        if (layer instanceof L.Circle) {
-          geojson.properties.TYPE = "Circle";
-          geojson.properties.RADIUS_M = layer.getRadius();
-        } else if (layer instanceof L.Polygon) {
-          geojson.properties.TYPE = "Polygon";
-        } else if (layer instanceof L.Polyline) {
-          geojson.properties.TYPE = "Line";
-        }
-        features.push(geojson);
-      }
-    });
-  }
-
-  if (features.length === 0) {
-    alert("No exportable geometries found");
-    return;
-  }
 
   const geojson = {
     type: 'FeatureCollection',
@@ -1945,6 +1998,7 @@ function addMarker(lat, lng, popup) {
 
   markers.push(marker);
   updateMapStats();
+  return marker; // Return so callers can register with importedLayers
 }
 
 function updateMapStats() {
@@ -2003,6 +2057,12 @@ function clearMapMarkers() {
     markers.forEach((m) => map.removeLayer(m));
   }
   markers = [];
+  if (markerClusterGroup) markerClusterGroup.clearLayers();
+  if (drawnItems) drawnItems.clearLayers();
+  if (importedLayers) importedLayers.clearLayers();
+  if (measurementLayers) measurementLayers.clearLayers();
+  if (bufferLayer) bufferLayer.clearLayers();
+  if (convexHullLayer) convexHullLayer.clearLayers();
   updateMapStats();
 }
 
@@ -2130,6 +2190,7 @@ function addDetailedMarker(lat, lng, rowData, rowIndex) {
 
   markers.push(marker);
   updateMapStats();
+  return marker; // Return so callers can register with importedLayers
 }
 
 function createPremiumPopupHTML(lat, lng, rowData, rowIndex) {
@@ -2279,52 +2340,88 @@ function searchLocation() {
   addMarkerFromInput(query);
 }
 
-function exportToKML(customMarkers, customFileName) {
-  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
-  if (exportMarkers.length === 0) {
-    alert("No markers to export");
+function exportToKML(dataSource, customFileName) {
+  const features = collectAllMapFeatures(dataSource);
+
+  if (features.length === 0) {
+    alert("No features to export");
     return;
   }
+
   let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
   kml += "<Document>\n";
-  kml += "<name>Exported Coordinates</name>\n";
-  kml +=
-    "<description>Coordinates exported from Advanced Coordinate Converter</description>\n";
-  kml += '<Style id="default">\n';
-  kml += "<IconStyle>\n";
-  kml += "<Icon>\n";
-  kml += "<href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href>\n";
-  kml += "</Icon>\n";
-  kml += "</IconStyle>\n";
+  kml += "<name>Exported Data</name>\n";
+  kml += "<description>Data exported from Advanced Coordinate Converter</description>\n";
+
+  kml += '<Style id="defaultMarker">\n';
+  kml += "<IconStyle>\n<Icon>\n<href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href>\n</Icon>\n</IconStyle>\n";
   kml += "</Style>\n";
-  exportMarkers.forEach((marker, index) => {
-    const latlng = marker.getLatLng();
-    const markerData = marker.markerData || {};
-    const rowData = markerData.rowData || {};
+  kml += '<Style id="defaultPoly">\n';
+  kml += "<LineStyle>\n<color>ff0000ff</color>\n<width>2</width>\n</LineStyle>\n";
+  kml += "<PolyStyle>\n<color>400000ff</color>\n</PolyStyle>\n";
+  kml += "</Style>\n";
+
+  features.forEach((feature, index) => {
+    const type = feature.geometry.type;
+    const coords = feature.geometry.coordinates;
+    const props = feature.properties || {};
+
     kml += "<Placemark>\n";
-    kml += `<name>Point ${index + 1}</name>\n`;
+    kml += `<name>${props.name || props.TYPE || type} ${index + 1}</name>\n`;
+    kml += `<styleUrl>${type === 'Point' ? '#defaultMarker' : '#defaultPoly'}</styleUrl>\n`;
+
     let description = "<![CDATA[\n";
-    description += `<h3>Point ${index + 1}</h3>\n`;
-    description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(latlng.lat).toFixed(6)}<br/>Longitude: ${parseFloat(latlng.lng).toFixed(6)}</p>\n`;
-    if (Object.keys(rowData).length > 0) {
-      description += "<p><strong>Additional Data:</strong></p>\n";
-      description +=
-        '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
-      for (const [key, value] of Object.entries(rowData)) {
-        if (value !== null && value !== undefined && value !== "") {
-          description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${value}</td></tr>\n`;
-        }
+    description += `<h3>${type} Details</h3>\n`;
+    if (type === "Point") {
+      const lat = Array.isArray(coords) ? coords[1] : 0;
+      const lng = Array.isArray(coords) ? coords[0] : 0;
+      description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
+    }
+    if (Object.keys(props).length > 0) {
+      description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
+      for (const [key, value] of Object.entries(props)) {
+        const displayValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
+        description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${displayValue}</td></tr>\n`;
       }
       description += "</table>\n";
     }
     description += "]]>\n";
     kml += `<description>${description}</description>\n`;
-    kml += "<Point>\n";
-    kml += `<coordinates>${parseFloat(latlng.lng).toFixed(6)},${parseFloat(latlng.lat).toFixed(6)},0</coordinates>\n`;
-    kml += "</Point>\n";
+
+    if (type === "Point") {
+      kml += "<Point>\n";
+      kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
+      kml += "</Point>\n";
+    } else if (type === "LineString") {
+      kml += "<LineString>\n<coordinates>\n";
+      coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+      kml += "\n</coordinates>\n</LineString>\n";
+    } else if (type === "Polygon") {
+      kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
+      coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+      kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
+    } else if (type === "MultiLineString") {
+      kml += "<MultiGeometry>\n";
+      coords.forEach(line => {
+        kml += "<LineString><coordinates>";
+        line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "</coordinates></LineString>\n";
+      });
+      kml += "</MultiGeometry>\n";
+    } else if (type === "MultiPolygon") {
+      kml += "<MultiGeometry>\n";
+      coords.forEach(poly => {
+        kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
+        poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
+      });
+      kml += "</MultiGeometry>\n";
+    }
+
     kml += "</Placemark>\n";
   });
+
   kml += "</Document>\n";
   kml += "</kml>";
   const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
@@ -2336,55 +2433,100 @@ function exportToKML(customMarkers, customFileName) {
   window.URL.revokeObjectURL(url);
 }
 
-function exportToKMZ(customMarkers, customFileName) {
-  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
-  if (exportMarkers.length === 0) {
-    alert("No markers to export");
+function exportToKMZ(dataSource, customFileName) {
+  const features = collectAllMapFeatures(dataSource);
+
+  if (features.length === 0) {
+    alert("No features to export");
     return;
   }
+
   let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
   kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
   kml += "<Document>\n";
-  kml += "<name>Exported Coordinates</name>\n";
-  kml += "<description>Coordinates exported from Advanced Coordinate Converter</description>\n";
-  exportMarkers.forEach((marker, index) => {
-    const latlng = marker.getLatLng();
-    const markerData = marker.markerData || {};
-    const rowData = markerData.rowData || {};
+  kml += "<name>Exported Data</name>\n";
+  kml += "<description>Data exported from Advanced Coordinate Converter</description>\n";
+
+  kml += '<Style id="defaultMarker">\n';
+  kml += "<IconStyle>\n<Icon>\n<href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href>\n</Icon>\n</IconStyle>\n";
+  kml += "</Style>\n";
+  kml += '<Style id="defaultPoly">\n';
+  kml += "<LineStyle>\n<color>ff0000ff</color>\n<width>2</width>\n</LineStyle>\n";
+  kml += "<PolyStyle>\n<color>400000ff</color>\n</PolyStyle>\n";
+  kml += "</Style>\n";
+
+  features.forEach((feature, index) => {
+    const type = feature.geometry.type;
+    const coords = feature.geometry.coordinates;
+    const props = feature.properties || {};
+
     kml += "<Placemark>\n";
-    kml += `<name>Point ${index + 1}</name>\n`;
+    kml += `<name>${props.name || props.TYPE || type} ${index + 1}</name>\n`;
+    kml += `<styleUrl>${type === 'Point' ? '#defaultMarker' : '#defaultPoly'}</styleUrl>\n`;
+
     let description = "<![CDATA[\n";
-    description += `<h3>Point ${index + 1}</h3>\n`;
-    description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(latlng.lat).toFixed(6)}<br/>Longitude: ${parseFloat(latlng.lng).toFixed(6)}</p>\n`;
-    if (Object.keys(rowData).length > 0) {
-      description += "<p><strong>Additional Data:</strong></p>\n";
+    description += `<h3>${type} Details</h3>\n`;
+    if (type === "Point") {
+      const lat = Array.isArray(coords) ? coords[1] : 0;
+      const lng = Array.isArray(coords) ? coords[0] : 0;
+      description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
+    }
+    if (Object.keys(props).length > 0) {
       description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
-      for (const [key, value] of Object.entries(rowData)) {
-        if (value !== null && value !== undefined && value !== "") {
-          description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${value}</td></tr>\n`;
-        }
+      for (const [key, value] of Object.entries(props)) {
+        const displayValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
+        description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${displayValue}</td></tr>\n`;
       }
       description += "</table>\n";
     }
     description += "]]>\n";
     kml += `<description>${description}</description>\n`;
-    kml += "<Point>\n";
-    kml += `<coordinates>${parseFloat(latlng.lng).toFixed(6)},${parseFloat(latlng.lat).toFixed(6)},0</coordinates>\n`;
-    kml += "</Point>\n";
+
+    if (type === "Point") {
+      kml += "<Point>\n";
+      kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
+      kml += "</Point>\n";
+    } else if (type === "LineString") {
+      kml += "<LineString>\n<coordinates>\n";
+      coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+      kml += "\n</coordinates>\n</LineString>\n";
+    } else if (type === "Polygon") {
+      kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
+      coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+      kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
+    } else if (type === "MultiLineString") {
+      kml += "<MultiGeometry>\n";
+      coords.forEach(line => {
+        kml += "<LineString><coordinates>";
+        line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "</coordinates></LineString>\n";
+      });
+      kml += "</MultiGeometry>\n";
+    } else if (type === "MultiPolygon") {
+      kml += "<MultiGeometry>\n";
+      coords.forEach(poly => {
+        kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
+        poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
+      });
+      kml += "</MultiGeometry>\n";
+    }
+
     kml += "</Placemark>\n";
   });
+
   kml += "</Document>\n";
   kml += "</kml>";
-  
+
   if (typeof JSZip === 'undefined') {
     alert("JSZip library not found for KMZ export");
     return;
   }
-  
+
   showProcessingOverlay("Generating KMZ...");
   const zip = new JSZip();
   zip.file("doc.kml", kml);
-  zip.generateAsync({type:"blob"}).then(function(content) {
+  zip.generateAsync({ type: "blob" }).then(function (content) {
     const url = window.URL.createObjectURL(content);
     const a = document.createElement("a");
     a.href = url;
@@ -2520,26 +2662,13 @@ function connectPoints() {
   }
 }
 
-function exportToGeoJSON(customMarkers, customFileName) {
-  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
-  if (exportMarkers.length === 0) {
-    alert("No markers to export.");
+function exportToGeoJSON(dataSource, customFileName) {
+  let features = collectAllMapFeatures(dataSource);
+
+  if (features.length === 0) {
+    alert("No features to export.");
     return;
   }
-
-  let features = exportMarkers.map((m) => {
-    let props = {};
-    if (m.markerData && m.markerData.rowData) props = m.markerData.rowData;
-
-    return {
-      type: "Feature",
-      geometry: {
-        type: "Point",
-        coordinates: [m.getLatLng().lng, m.getLatLng().lat],
-      },
-      properties: props,
-    };
-  });
 
   let geojson = {
     type: "FeatureCollection",
@@ -2557,97 +2686,90 @@ function exportToGeoJSON(customMarkers, customFileName) {
   window.URL.revokeObjectURL(url);
 }
 
-function exportToJSON(customMarkers, customFileName) {
-  const exportMarkers = customMarkers || (selectedMarkers.length > 0 ? selectedMarkers : markers);
-  if (exportMarkers.length === 0) {
-    alert("No markers to export.");
+function exportToJSON(dataSource, customFileName) {
+  let features = collectAllMapFeatures(dataSource);
+
+  if (features.length === 0) {
+    alert("No features to export.");
     return;
   }
 
-  // Collect all unique field names from all markers
+  // Define ArcMap compatible fields
   let fieldSet = new Set();
-  exportMarkers.forEach((m) => {
-    if (m.markerData && m.markerData.rowData) {
-      Object.keys(m.markerData.rowData).forEach((k) => fieldSet.add(k));
+  const allEsriFeatures = [];
+
+  features.forEach((feature, index) => {
+    const type = feature.geometry.type;
+    const coords = feature.geometry.coordinates;
+    const props = feature.properties || {};
+
+    let attributes = { OBJECTID: allEsriFeatures.length + 1 };
+    for (let [key, value] of Object.entries(props)) {
+      let cleanKey = key.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 31);
+      const displayValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
+      attributes[cleanKey] = displayValue;
+      fieldSet.add(JSON.stringify({ name: cleanKey, alias: key }));
+    }
+
+    let esriGeom = null;
+    let esriType = "";
+
+    if (type === "Point") {
+      esriGeom = { x: coords[0], y: coords[1] };
+      esriType = "esriGeometryPoint";
+      if (!attributes.LATITUDE) attributes.LATITUDE = coords[1];
+      if (!attributes.LONGITUDE) attributes.LONGITUDE = coords[0];
+    } else if (type === "LineString") {
+      esriGeom = { paths: [coords] };
+      esriType = "esriGeometryPolyline";
+    } else if (type === "Polygon") {
+      esriGeom = { rings: coords };
+      esriType = "esriGeometryPolygon";
+    } else if (type === "MultiLineString") {
+      esriGeom = { paths: coords };
+      esriType = "esriGeometryPolyline";
+    } else if (type === "MultiPolygon") {
+      const rings = [];
+      coords.forEach(poly => poly.forEach(ring => rings.push(ring)));
+      esriGeom = { rings: rings };
+      esriType = "esriGeometryPolygon";
+    }
+
+    if (esriGeom) {
+      allEsriFeatures.push({
+        attributes: attributes,
+        geometry: esriGeom,
+        geometryType: esriType
+      });
     }
   });
 
-  // Define ArcMap compatible fields
-  let fields = [
+  const fields = [
     { name: "OBJECTID", type: "esriFieldTypeOID", alias: "OBJECTID" },
     { name: "LATITUDE", type: "esriFieldTypeDouble", alias: "LATITUDE" },
     { name: "LONGITUDE", type: "esriFieldTypeDouble", alias: "LONGITUDE" },
   ];
 
-  fieldSet.forEach((f) => {
-    // Skip lat/lng as we added them explicitly
-    const upperF = f.toUpperCase();
-    if (
-      upperF === "LATITUDE" ||
-      upperF === "LONGITUDE" ||
-      upperF === "LAT" ||
-      upperF === "LNG"
-    )
-      return;
-
+  fieldSet.forEach(fStr => {
+    const f = JSON.parse(fStr);
+    if (["LATITUDE", "LONGITUDE"].includes(f.name.toUpperCase())) return;
     fields.push({
-      name: f.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 31), // Esri field name limits
+      name: f.name,
       type: "esriFieldTypeString",
-      alias: f,
+      alias: f.alias
     });
   });
 
-  let features = exportMarkers.map((m, index) => {
-    let lat = m.getLatLng().lat;
-    let lng = m.getLatLng().lng;
-
-    let attributes = {
-      OBJECTID: index + 1,
-      LATITUDE: lat,
-      LONGITUDE: lng,
-    };
-
-    if (m.markerData && m.markerData.rowData) {
-      for (let [key, value] of Object.entries(m.markerData.rowData)) {
-        const upperKey = key.toUpperCase();
-        if (
-          upperKey === "LATITUDE" ||
-          upperKey === "LONGITUDE" ||
-          upperKey === "LAT" ||
-          upperKey === "LNG"
-        )
-          continue;
-
-        let cleanKey = key.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 31);
-        attributes[cleanKey] = value;
-      }
-    }
-
-    return {
-      attributes: attributes,
-      geometry: {
-        x: lng,
-        y: lat,
-      },
-    };
-  });
-
-  // Final Esri JSON structure
-  let esriJson = {
+  const esriJson = {
     displayFieldName: "",
-    fieldAliases: fields.reduce((acc, f) => {
-      acc[f.name] = f.alias;
-      return acc;
-    }, {}),
-    geometryType: "esriGeometryPoint",
+    fieldAliases: fields.reduce((acc, f) => { acc[f.name] = f.alias; return acc; }, {}),
+    geometryType: allEsriFeatures.length > 0 ? allEsriFeatures[0].geometryType : "esriGeometryPoint",
     spatialReference: { wkid: 4326, latestWkid: 4326 },
     fields: fields,
-    features: features,
+    features: allEsriFeatures.map(f => ({ attributes: f.attributes, geometry: f.geometry }))
   };
 
-  const blob = new Blob([JSON.stringify(esriJson, null, 2)], {
-    type: "application/json",
-  });
+  const blob = new Blob([JSON.stringify(esriJson, null, 2)], { type: "application/json" });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -3323,12 +3445,22 @@ document.head.appendChild(style);
 
 // Export Map Data to Excel and CSV
 function exportToExcel() {
-  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+  let exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : [...markers];
+  
+  // Include points from imported layers
+  if (importedLayers) {
+    importedLayers.eachLayer(layer => {
+      if ((layer instanceof L.Marker || layer instanceof L.CircleMarker) && !exportMarkers.includes(layer)) {
+        exportMarkers.push(layer);
+      }
+    });
+  }
+
   if (exportMarkers.length === 0) {
     if (typeof showToast === 'function') {
-      showToast("No data on map to export", "warning");
+      showToast("No point data on map to export", "warning");
     } else {
-      alert("No data on map to export");
+      alert("No point data on map to export");
     }
     return;
   }
@@ -3336,12 +3468,22 @@ function exportToExcel() {
 }
 
 function exportToCSV() {
-  const exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : markers;
+  let exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : [...markers];
+  
+  // Include points from imported layers
+  if (importedLayers) {
+    importedLayers.eachLayer(layer => {
+      if ((layer instanceof L.Marker || layer instanceof L.CircleMarker) && !exportMarkers.includes(layer)) {
+        exportMarkers.push(layer);
+      }
+    });
+  }
+
   if (exportMarkers.length === 0) {
     if (typeof showToast === 'function') {
-      showToast("No data on map to export", "warning");
+      showToast("No point data on map to export", "warning");
     } else {
-      alert("No data on map to export");
+      alert("No point data on map to export");
     }
     return;
   }
@@ -3356,16 +3498,16 @@ function handleMapExcelCSVExport(exportMarkers, format) {
 
   showProcessingOverlay(`Generating ${format.toUpperCase()} Results...`);
   const worker = window.initWorker();
-  
+
   let allKeys = new Set();
   exportMarkers.forEach(m => {
     if (m.markerData && m.markerData.rowData) {
       Object.keys(m.markerData.rowData).forEach(k => allKeys.add(k));
     }
   });
-  
+
   const headers = ["Latitude", "Longitude", ...Array.from(allKeys)];
-  
+
   const aoaData = [headers];
   exportMarkers.forEach(m => {
     let lat = null, lng = null;
@@ -3374,9 +3516,9 @@ function handleMapExcelCSVExport(exportMarkers, format) {
       lat = latlng.lat;
       lng = latlng.lng;
     }
-    
+
     if (lat === null || lng === null) return;
-    
+
     const row = [lat, lng];
     const rowData = (m.markerData && m.markerData.rowData) ? m.markerData.rowData : {};
     Array.from(allKeys).forEach(k => {
@@ -3420,3 +3562,10 @@ function handleMapExcelCSVExport(exportMarkers, format) {
     });
   }
 }
+
+// Expose GIS export functions to window
+window.exportToShp = exportToShp;
+window.exportToKML = exportToKML;
+window.exportToKMZ = exportToKMZ;
+window.exportToGeoJSON = exportToGeoJSON;
+window.exportToJSON = exportToJSON;

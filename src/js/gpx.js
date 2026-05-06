@@ -197,6 +197,10 @@ function showGpxOnMap() {
             const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' });
           }
+          // Add non-point features to drawnItems for export
+          if (drawnItems && !(layer instanceof L.Marker)) {
+            drawnItems.addLayer(layer);
+          }
         },
         pointToLayer: function (feature, latlng) {
           const serialNumber = (gpxCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;

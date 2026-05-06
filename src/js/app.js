@@ -1,4 +1,4 @@
-﻿// Main application initialization and drag-drop setup
+// Main application initialization and drag-drop setup
 
 // Initialization status logging
 console.log("=== Advanced Coordinate Conversion Tool ===");
@@ -172,7 +172,7 @@ function setupDragDrop() {
 
 function generateExportFileName(fileInputIds, toolName, extension) {
   let baseName = "export";
-  
+
   if (Array.isArray(fileInputIds)) {
     const names = [];
     fileInputIds.forEach(id => {
@@ -193,8 +193,8 @@ function generateExportFileName(fileInputIds, toolName, extension) {
   }
 
   const d = new Date();
-  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
   if (toolName) {
     return `${baseName}_${dateStr}_${toolName}.${extension}`;
   }
