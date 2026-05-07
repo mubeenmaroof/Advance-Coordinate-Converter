@@ -1,5 +1,56 @@
 // Shapefile (.zip) File Handling Functions
 
+let shpProgressPulseInterval = null;
+let shpProgressPulseValue = 0;
+let shpProgressPulseMax = 90;
+let shpWorkerTimeout = null;
+
+function startShpProgressPulse(startValue = 20, maxValue = 90) {
+  stopShpProgressPulse();
+  shpProgressPulseValue = Math.max(0, Math.min(100, startValue));
+  shpProgressPulseMax = Math.min(100, Math.max(startValue, maxValue));
+  updateProcessingProgress(shpProgressPulseValue);
+
+  shpProgressPulseInterval = setInterval(() => {
+    if (shpProgressPulseValue >= shpProgressPulseMax) {
+      clearInterval(shpProgressPulseInterval);
+      shpProgressPulseInterval = null;
+      return;
+    }
+    shpProgressPulseValue += 1;
+    updateProcessingProgress(shpProgressPulseValue);
+  }, 200);
+}
+
+function stopShpProgressPulse() {
+  if (shpProgressPulseInterval) {
+    clearInterval(shpProgressPulseInterval);
+    shpProgressPulseInterval = null;
+  }
+}
+
+function startShpWorkerTimeout(delay = 45000) {
+  stopShpWorkerTimeout();
+  shpWorkerTimeout = setTimeout(() => {
+    showProcessingOverlay('Still processing the shapefile, please wait...', shpProgressPulseValue);
+    startShpProgressPulse(shpProgressPulseValue, 96);
+  }, delay);
+}
+
+function stopShpWorkerTimeout() {
+  if (shpWorkerTimeout) {
+    clearTimeout(shpWorkerTimeout);
+    shpWorkerTimeout = null;
+  }
+}
+
+function handleShpWorkerError(errorMessage) {
+  stopShpProgressPulse();
+  stopShpWorkerTimeout();
+  hideProcessingOverlay();
+  showToast(`Shapefile processing failed: ${errorMessage}`, 'error');
+}
+
 function handleShpUpload(event) {
   if (window.checkExistingData && window.checkExistingData()) {
     event.target.value = '';
@@ -19,96 +70,178 @@ async function handleShpFiles(files) {
   console.log("📦 Multi-file Shapefile processing triggered", files.length, "files");
 
   try {
-    const fileMap = {};
+    // Group files by base name (filename without extension)
+    const fileGroups = {};
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      const ext = f.name.split('.').pop().toLowerCase();
-      fileMap[ext] = f;
+      const nameParts = f.name.split('.');
+      const ext = nameParts.pop().toLowerCase();
+      const baseName = nameParts.join('.');
+
+      if (!fileGroups[baseName]) {
+        fileGroups[baseName] = {};
+      }
+      fileGroups[baseName][ext] = f;
     }
 
-    const required = ['shp', 'dbf', 'shx', 'prj'];
-    const missing = required.filter(ext => !fileMap[ext]);
+    console.log("📦 File groups identified:", Object.keys(fileGroups));
 
-    if (missing.length > 0) {
+    // Find complete shapefile sets (must have .shp, .dbf, .shx, .prj)
+    const required = ['shp', 'dbf', 'shx', 'prj'];
+    const completeGroups = [];
+    const incompleteGroups = [];
+
+    Object.entries(fileGroups).forEach(([baseName, group]) => {
+      const missing = required.filter(ext => !group[ext]);
+      if (missing.length === 0) {
+        completeGroups.push({ baseName, files: group });
+      } else {
+        incompleteGroups.push({ baseName, missing });
+      }
+    });
+
+    if (completeGroups.length === 0) {
+      const errorMsg = incompleteGroups.length > 0
+        ? `No complete shapefile sets found. Incomplete sets: ${incompleteGroups.map(g => `${g.baseName} (missing: .${g.missing.join(', .')})`).join('; ')}`
+        : 'No shapefile components found.';
+
       if (shpResult) {
         shpResult.innerHTML = `<div class="error" style="color: #e53e3e; background: #fff5f5; padding: 15px; border-radius: 8px; border: 1px solid #feb2b2; margin-top: 15px;">
-          <strong>Missing required components:</strong> .${missing.join(', .')} <br>
-          <small>Please select all four files (.shp, .dbf, .shx, .prj) together.</small>
+          <strong>Missing required components:</strong> ${errorMsg} <br>
+          <small>Each shapefile needs all four files (.shp, .dbf, .shx, .prj) with matching base names.</small>
         </div>`;
       }
       return;
     }
 
-    showProcessingOverlay("Reading Shapefile components...");
+    console.log(`📦 Processing ${completeGroups.length} complete shapefile set(s)`);
 
-    const buffers = {};
-    const promises = required.map(ext => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          buffers[ext] = e.target.result;
-          resolve();
-        };
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(fileMap[ext]);
-      });
-    });
+    showProcessingOverlay(`Reading ${completeGroups.length} Shapefile set(s)...`, 10);
+    updateProcessingProgress(10);
 
-    await Promise.all(promises);
+    // Process each complete shapefile set
+    const allGeoJsonFeatures = [];
+    let processedCount = 0;
 
-    showProcessingOverlay("Offloading to GIS Worker...");
+    for (const group of completeGroups) {
+      try {
+        console.log(`📦 Processing shapefile: ${group.baseName}`);
 
-    // Create GIS Worker
-    const gisWorker = new Worker('src/js/gisWorker.js');
+        const buffers = {};
+        const promises = required.map(ext => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              buffers[ext] = e.target.result;
+              resolve();
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(group.files[ext]);
+          });
+        });
 
-    // Use Transferable Objects (buffers) to avoid memory cloning
-    const transferableBuffers = Object.values(buffers).filter(b => b instanceof ArrayBuffer);
+        await Promise.all(promises);
 
-    gisWorker.postMessage({
-      type: 'parseShp',
-      buffers: buffers
-    }, transferableBuffers);
+        showProcessingOverlay(`Offloading ${group.baseName} to GIS Worker...`, 20);
+        startShpProgressPulse(20, 88);
+        startShpWorkerTimeout(45000);
 
-    gisWorker.onmessage = function (e) {
-      const { type, geojson, message, error } = e.data;
+        // Create GIS Worker for this shapefile
+        const gisWorker = new Worker('src/js/gisWorker.js');
 
-      if (type === 'status') {
-        showProcessingOverlay(message);
-      } else if (type === 'error') {
-        gisWorker.terminate();
-        throw new Error(error);
-      } else if (type === 'complete') {
-        currentShpData = geojson;
-        currentShpData._sourceFileName = fileMap.shp.name;
-        processShpData(geojson);
-        if (typeof syncUploadUI === 'function') syncUploadUI();
+        // Process this shapefile
+        const geojson = await new Promise((resolve, reject) => {
+          const transferableBuffers = Object.values(buffers).filter(b => b instanceof ArrayBuffer);
 
-        // Only update text, don't overwrite the whole innerHTML which might have event listeners
-        const dropZoneTitle = dropZone.querySelector('h3');
-        const dropZoneDesc = dropZone.querySelector('p');
-        if (dropZoneTitle) dropZoneTitle.innerText = `✅ ${fileMap.shp.name}`;
-        if (dropZoneDesc) dropZoneDesc.innerText = "Processed in background";
-        if (document.getElementById("shpTopClearBtnGroup")) document.getElementById("shpTopClearBtnGroup").style.display = "block";
-        if (document.getElementById("shpBottomActionBtnGroup")) document.getElementById("shpBottomActionBtnGroup").style.display = "block";
-        hideProcessingOverlay();
-        showToast("✓ Shapefile processed successfully in background", "success");
-        gisWorker.terminate();
+          gisWorker.postMessage({
+            type: 'parseShp',
+            buffers: buffers
+          }, transferableBuffers);
+
+          gisWorker.onmessage = function (e) {
+            const { type, geojson, message, error } = e.data;
+
+            if (type === 'status') {
+              showProcessingOverlay(`${group.baseName}: ${message}`, shpProgressPulseValue);
+            } else if (type === 'error') {
+              gisWorker.terminate();
+              reject(new Error(error || 'Unknown worker error'));
+            } else if (type === 'complete') {
+              gisWorker.terminate();
+              resolve(geojson);
+            }
+          };
+
+          gisWorker.onerror = function (err) {
+            console.error("Worker Error:", err);
+            gisWorker.terminate();
+            reject(new Error(err.message || 'GIS worker error'));
+          };
+        });
+
+        // Add features from this shapefile to the combined result
+        const collections = Array.isArray(geojson) ? geojson : [geojson];
+        collections.forEach(collection => {
+          if (collection.features) {
+            // Add source file info to each feature
+            collection.features.forEach(feature => {
+              feature.properties = feature.properties || {};
+              feature.properties._sourceFile = group.baseName + '.shp';
+            });
+            allGeoJsonFeatures.push(...collection.features);
+          }
+        });
+
+        processedCount++;
+        const progress = Math.floor(20 + (processedCount / completeGroups.length) * 70);
+        updateProcessingProgress(progress);
+        showProcessingOverlay(`Processed ${processedCount}/${completeGroups.length} shapefiles...`, progress);
+
+        console.log(`📦 Completed shapefile ${group.baseName}, features:`, collections.reduce((sum, c) => sum + (c.features ? c.features.length : 0), 0));
+
+      } catch (err) {
+        console.error(`❌ Error processing shapefile ${group.baseName}:`, err);
+        showToast(`Failed to process ${group.baseName}: ${err.message}`, 'error');
+        // Continue with other shapefiles
       }
+    }
+
+    if (allGeoJsonFeatures.length === 0) {
+      throw new Error('No valid features found in any of the shapefiles');
+    }
+
+    // Create combined GeoJSON
+    const combinedGeoJson = {
+      type: 'FeatureCollection',
+      features: allGeoJsonFeatures
     };
 
-    gisWorker.onerror = function (err) {
-      console.error("Worker Error:", err);
-      gisWorker.terminate();
-      hideProcessingOverlay();
-      showToast("Worker error occurred during processing", "error");
-    };
+    stopShpProgressPulse();
+    stopShpWorkerTimeout();
+    updateProcessingProgress(100);
+    currentShpData = combinedGeoJson;
+    currentShpData._sourceFileName = `${completeGroups.length} shapefile(s)`;
+    processShpData(combinedGeoJson);
+    if (typeof syncUploadUI === 'function') syncUploadUI();
+
+    // Update UI
+    const dropZoneTitle = dropZone.querySelector('h3');
+    const dropZoneDesc = dropZone.querySelector('p');
+    if (dropZoneTitle) dropZoneTitle.innerText = `✅ ${completeGroups.length} Shapefile(s) Processed`;
+    if (dropZoneDesc) dropZoneDesc.innerText = `Combined ${allGeoJsonFeatures.length} features from ${completeGroups.map(g => g.baseName).join(', ')}`;
+    if (document.getElementById("shpTopClearBtnGroup")) document.getElementById("shpTopClearBtnGroup").style.display = "block";
+    if (document.getElementById("shpBottomActionBtnGroup")) document.getElementById("shpBottomActionBtnGroup").style.display = "block";
+    hideProcessingOverlay();
+    showToast(`✓ ${completeGroups.length} shapefile(s) processed successfully (${allGeoJsonFeatures.length} features)`, "success");
 
   } catch (err) {
     console.error("❌ Error parsing Shapefile components:", err);
     hideProcessingOverlay();
+    stopShpProgressPulse();
+    stopShpWorkerTimeout();
     if (shpResult) {
       shpResult.innerHTML = `<div class="error" style="color: #e53e3e; background: #fff5f5; padding: 15px; border-radius: 8px; border: 1px solid #feb2b2; margin-top: 15px;">
-        <strong>Error processing components:</strong> ${err.message}. <br>
+        <strong>Error processing shapefiles:</strong> ${err.message}. <br>
       </div>`;
     }
   }
@@ -373,6 +506,28 @@ function filterShpFeaturesByCategories(featureCollection, categories) {
   return { type: 'FeatureCollection', features: filtered };
 }
 
+function downloadShpResults() {
+  if (!currentShpData || !currentShpData.features || currentShpData.features.length === 0) {
+    alert("No shapefile data available to download.");
+    return;
+  }
+
+  const exportSelect = document.getElementById('shpExportFormat');
+  const format = exportSelect ? exportSelect.value : 'shp';
+
+  const selectedCategories = Array.from(document.querySelectorAll('input[name="shpExportCategory"]:checked')).map(input => input.value);
+  let featureCollectionToExport = currentShpData;
+
+  if (selectedCategories.length > 0) {
+    featureCollectionToExport = filterShpFeaturesByCategories(currentShpData, selectedCategories);
+  }
+
+  const baseName = currentShpData._sourceFileName ? fileNameWithoutExtension(currentShpData._sourceFileName) : 'shapefile_export';
+  const customFileName = `${baseName}_${new Date().toISOString().replace(/[:.]/g, '-')}`;
+
+  exportShpCategory(format, featureCollectionToExport, customFileName);
+}
+
 function shpFeatureCollectionToDataStore(featureCollection) {
   const result = [];
   if (!featureCollection || featureCollection.type !== 'FeatureCollection' || !Array.isArray(featureCollection.features)) {
@@ -417,6 +572,7 @@ function shpFeatureCollectionToDataStore(featureCollection) {
 }
 
 function exportShpCategory(format, featureCollection, customFileName) {
+  console.log(`[SHP Export] Starting export for format: ${format}, filename: ${customFileName}`);
   if (!featureCollection || !featureCollection.features || featureCollection.features.length === 0) {
     console.error('[SHP Export] Empty feature collection or missing features');
     alert(`No features available in ${customFileName}`);
@@ -427,6 +583,7 @@ function exportShpCategory(format, featureCollection, customFileName) {
 
   try {
     if (format === 'csv' || format === 'xlsx') {
+      console.log(`[SHP Export] Processing ${format.toUpperCase()} export`);
       const dataStore = shpFeatureCollectionToDataStore(featureCollection);
       if (dataStore.length === 0) {
         console.error('[SHP Export] No dataStore rows generated from features');
@@ -434,6 +591,7 @@ function exportShpCategory(format, featureCollection, customFileName) {
         return;
       }
       console.log(`[SHP Export] Generated ${dataStore.length} rows for CSV/XLSX export`);
+      console.log(`[SHP Export] Calling handleGenericExport with inputId: shpFile`);
       handleGenericExport(format, dataStore, 'shpFile', customFileName);
       return;
     }
@@ -522,6 +680,9 @@ function showShpOnMap() {
       L.geoJSON(chunkCollection, {
         renderer: renderer,
         onEachFeature: function (feature, layer) {
+          // Store the feature data on the layer for selection purposes
+          layer.feature = feature;
+          
           // Optimized: Only bind click, avoid binding popup until needed
           layer.on('click', function (e) {
             const props = { ...feature.properties };
@@ -612,7 +773,7 @@ function clearShpData() {
     const dropZoneTitle = shpDropZone.querySelector('h3');
     const dropZoneDesc = shpDropZone.querySelector('p');
     if (dropZoneTitle) dropZoneTitle.innerText = "📦 Drag & Drop Shapefile Components";
-    if (dropZoneDesc) dropZoneDesc.innerHTML = 'Select all: <strong>.shp, .dbf, .shx, .prj</strong>';
+    if (dropZoneDesc) dropZoneDesc.innerHTML = 'Select shapefile sets: <strong>.shp, .dbf, .shx, .prj</strong> (multiple supported)';
   }
 
   const fileInput = document.getElementById("shpFile");
@@ -624,63 +785,3 @@ window.handleShpFiles = handleShpFiles;
 window.showShpOnMap = showShpOnMap;
 window.clearShpData = clearShpData;
 window.downloadShpResults = downloadShpResults;
-
-function downloadShpResults() {
-  if (!currentShpData) {
-    alert("Please load valid Shapefile data first.");
-    return;
-  }
-
-  // Handle case where currentShpData might be an array of FeatureCollections
-  const collections = Array.isArray(currentShpData) ? currentShpData : [currentShpData];
-  const allFeatures = [];
-  collections.forEach(col => {
-    if (col.features) allFeatures.push(...col.features);
-  });
-
-  if (allFeatures.length === 0) {
-    alert("Please load valid Shapefile data first.");
-    return;
-  }
-
-  // Create a combined FeatureCollection for filtering
-  const combinedFeatureCollection = {
-    type: 'FeatureCollection',
-    features: allFeatures,
-    _sourceFileName: (Array.isArray(currentShpData) ? currentShpData[0]?._sourceFileName : currentShpData?._sourceFileName) || "shp_export"
-  };
-
-  const format = document.getElementById("shpExportFormat")?.value || "csv";
-  const selectedCategories = Array.from(document.querySelectorAll('input[name="shpExportCategory"]:checked')).map(el => el.value);
-
-  console.log("[SHP Download] Format:", format);
-  console.log("[SHP Download] Selected categories:", selectedCategories);
-  console.log("[SHP Download] Total features in combined data:", allFeatures.length);
-
-  if (selectedCategories.length === 0) {
-    alert("Please select at least one category to export.");
-    return;
-  }
-
-  console.log("[SHP Download] Starting export...");
-
-  selectedCategories.forEach(category => {
-    const filtered = filterShpFeaturesByCategories(combinedFeatureCollection, [category]);
-    console.log(`[SHP Download] Filtered ${category}:`, filtered.features.length, "features");
-
-    if (filtered.features.length === 0) {
-      console.warn(`[SHP Download] No features found for category: ${category}`);
-      return;
-    }
-
-    const cleanBase = fileNameWithoutExtension(combinedFeatureCollection._sourceFileName);
-    const extension = format === 'kmz' ? 'kmz' : format === 'geojson' ? 'geojson' : format === 'json' ? 'json' : format;
-    const customFileName = `${cleanBase}_${suffix}.${extension}`;
-    console.log(`[SHP Download] Calling exportShpCategory for ${category}:`, customFileName);
-    exportShpCategory(format, filtered, customFileName);
-  });
-}
-
-function fileNameWithoutExtension(name) {
-  return name ? name.replace(/\.[^.]+$/, '') : 'export';
-}

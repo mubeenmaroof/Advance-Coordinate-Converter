@@ -769,12 +769,19 @@ function filterPointsByDrawing(layer) {
 
     // Handle different shape types
     let isInsideFunction = null;
+    let selectionGeoJSON = null;
 
     if (layer instanceof L.Circle) {
       // Circle selection logic
       const center = layer.getLatLng();
       const radius = layer.getRadius(); // in meters
       console.log("Circle detected - radius:", radius, "meters");
+      
+      // Create a circular polygon for spatial queries (lines, polygons)
+      const centerPoint = turf.point([center.lng, center.lat]);
+      selectionGeoJSON = turf.circle(centerPoint, radius / 1000, { units: 'kilometers' }); // Convert radius to km
+      console.log("Circle GeoJSON created:", selectionGeoJSON);
+      
       isInsideFunction = (marker) => {
         const markerPoint = turf.point([
           marker.getLatLng().lng,
@@ -794,8 +801,8 @@ function filterPointsByDrawing(layer) {
       // Polygon/Rectangle/Polyline selection logic
       console.log("Polygon/Rectangle detected");
       try {
-        const geojson = layer.toGeoJSON();
-        console.log("Shape GeoJSON:", geojson);
+        selectionGeoJSON = layer.toGeoJSON();
+        console.log("Shape GeoJSON:", selectionGeoJSON);
 
         // For any polygon-like shape, use point-in-polygon
         isInsideFunction = (marker) => {
@@ -804,7 +811,7 @@ function filterPointsByDrawing(layer) {
             marker.getLatLng().lat,
           ]);
           try {
-            return turf.booleanPointInPolygon(markerPoint, geojson);
+            return turf.booleanPointInPolygon(markerPoint, selectionGeoJSON);
           } catch (err) {
             console.error("Error in booleanPointInPolygon:", err);
             return false;
@@ -853,20 +860,105 @@ function filterPointsByDrawing(layer) {
       }
     });
 
+    // Also select features from imported layers (polylines, polygons)
+    const selectedFeatures = { points: [], lines: [], polygons: [] };
+    
+    console.log("🔍 Starting feature detection from imported layers...");
+    console.log("importedLayers exists:", !!importedLayers);
+    console.log("selectionGeoJSON exists:", !!selectionGeoJSON);
+    
+    if (importedLayers) {
+      let layerCount = 0;
+      let geometryCounts = { Point: 0, LineString: 0, MultiLineString: 0, Polygon: 0, MultiPolygon: 0 };
+      
+      importedLayers.eachLayer((geoLayer) => {
+        layerCount++;
+        try {
+          // For GeoJSON layers, the feature data is stored in the layer.feature property
+          const feature = geoLayer.feature;
+          if (!feature || !feature.geometry) {
+            console.warn(`Layer ${layerCount}: Missing feature or geometry`);
+            return;
+          }
+
+          const geomType = feature.geometry.type;
+          geometryCounts[geomType] = (geometryCounts[geomType] || 0) + 1;
+          
+          console.log(`Layer ${layerCount}: Type=${geomType}, has properties:`, !!feature.properties);
+          let isSelected = false;
+
+          if (geomType === 'Point') {
+            const point = turf.point(feature.geometry.coordinates);
+            if (selectionGeoJSON) {
+              isSelected = turf.booleanPointInPolygon(point, selectionGeoJSON);
+            } else if (isInsideFunction) {
+              isSelected = isInsideFunction({ getLatLng: () => ({ lat: feature.geometry.coordinates[1], lng: feature.geometry.coordinates[0] }) });
+            }
+            if (isSelected) {
+              console.log(`✓ Point selected`);
+              selectedFeatures.points.push({ layer: geoLayer, feature: feature });
+            }
+          } else if (geomType === 'LineString' || geomType === 'MultiLineString') {
+            // Check if line intersects with selection (works for both circles and polygons)
+            if (selectionGeoJSON) {
+              try {
+                const lineIntersectResult = turf.lineIntersect(feature, selectionGeoJSON);
+                const intersects = lineIntersectResult && lineIntersectResult.features && lineIntersectResult.features.length > 0;
+                console.log(`Line/MultiLineString: lineIntersect result =`, lineIntersectResult, "intersects=", intersects);
+                if (intersects) {
+                  console.log(`✓ Line selected`);
+                  selectedFeatures.lines.push({ layer: geoLayer, feature: feature });
+                }
+              } catch (err) {
+                console.error("Line intersection check failed:", err.message);
+              }
+            } else {
+              console.log("LineString: selectionGeoJSON is null, skipping");
+            }
+          } else if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+            // Check if polygon overlaps with selection
+            if (selectionGeoJSON) {
+              try {
+                const overlaps = turf.booleanOverlap(feature, selectionGeoJSON);
+                console.log(`Polygon/MultiPolygon: booleanOverlap result =`, overlaps);
+                if (overlaps) {
+                  console.log(`✓ Polygon selected`);
+                  selectedFeatures.polygons.push({ layer: geoLayer, feature: feature });
+                }
+              } catch (err) {
+                console.error("Polygon overlap check failed:", err.message);
+              }
+            } else {
+              console.log("Polygon: selectionGeoJSON is null, skipping");
+            }
+          }
+        } catch (err) {
+          console.error(`Layer ${layerCount} error:`, err.message);
+        }
+      });
+      console.log(`📊 Total layers processed: ${layerCount}`);
+      console.log(`📊 Geometry type counts:`, geometryCounts);
+      console.log(`📊 Selected features:`, selectedFeatures);
+    } else {
+      console.log("⚠️ importedLayers is not available");
+    }
+
     console.log("✅ Selected markers count:", count);
+    console.log("Selected features by type:", selectedFeatures);
     console.log("Selected markers:", selectedMarkers);
 
-    // Show the selected data panel
-    displaySelectedMarkersPanel(selectedMarkers, layer);
+    // Show the enhanced selected data panel with separate tables
+    displaySelectedMarkersPanel(selectedMarkers, layer, selectedFeatures);
 
     // Show confirmation toast (non-blocking)
-    if (count > 0) {
+    const totalSelected = count + selectedFeatures.points.length + selectedFeatures.lines.length + selectedFeatures.polygons.length;
+    if (totalSelected > 0) {
       showToast(
-        `✓ Selected ${count} location(s) within the boundary!`,
+        `✓ Selected ${totalSelected} feature(s): ${count} points, ${selectedFeatures.lines.length} lines, ${selectedFeatures.polygons.length} polygons!`,
         "success",
       );
     } else {
-      showToast("No locations found within the selected boundary.", "info");
+      showToast("No features found within the selected boundary.", "info");
     }
   } catch (err) {
     console.error("❌ Fatal error in filterPointsByDrawing:", err);
@@ -916,8 +1008,16 @@ function showToast(message, type = "info") {
   }, 4000);
 }
 
-function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
-  const count = selectedMarkersArray.length;
+function displaySelectedMarkersPanel(selectedMarkersArray, layer, selectedFeatures = { points: [], lines: [], polygons: [] }) {
+  const markerCount = selectedMarkersArray.length;
+  const pointCount = selectedFeatures.points.length;
+  const lineCount = selectedFeatures.lines.length;
+  const polygonCount = selectedFeatures.polygons.length;
+  const totalCount = markerCount + pointCount + lineCount + polygonCount;
+
+  console.log("📊 displaySelectedMarkersPanel called:");
+  console.log(`- Markers: ${markerCount}, Points: ${pointCount}, Lines: ${lineCount}, Polygons: ${polygonCount}`);
+  console.log("- selectedFeatures:", selectedFeatures);
 
   // Create or get the selection panel container
   let panelContainer = document.getElementById("selectedMarkersPanel");
@@ -970,8 +1070,7 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
     }
   }
 
-  // Build header with count and action buttons
-  // Add Resize Handles (Top, Left, Top-Left Corner)
+  // Add Resize Handles
   const resizeHandleTop = document.createElement("div");
   resizeHandleTop.style.cssText = "position:absolute; top:0; left:0; width:100%; height:5px; cursor:ns-resize; z-index:1001;";
   const resizeHandleLeft = document.createElement("div");
@@ -1008,7 +1107,6 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
         const newHeight = startHeight + (startY - moveEvent.clientY);
         if (newHeight > 100) {
           panelContainer.style.height = newHeight + "px";
-          // Also update the body max-height if maximized
           const body = document.getElementById("selectionPanelBody");
           if (body && body.style.display !== "none") {
             body.style.maxHeight = (newHeight - 70) + "px";
@@ -1033,60 +1131,108 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
   resizeHandleLeft.addEventListener("mousedown", (e) => startResize(e, resizeHandleLeft));
   resizeHandleTopLeft.addEventListener("mousedown", (e) => startResize(e, resizeHandleTopLeft));
 
+  // Build tabs for each geometry type
+  const tabsHTML = `
+    <div style="display: flex; border-bottom: 1px solid #e0e0e0; background: #f5f5f5;">
+      ${(markerCount + pointCount) > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('points')" style="flex: 1; padding: 10px; border: none; background: white; border-bottom: 2px solid #667eea; cursor: pointer; font-weight: 600; font-size: 12px;">📍 Points (${markerCount + pointCount})</button>` : ''}
+      ${lineCount > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('lines')" style="flex: 1; padding: 10px; border: none; background: #f5f5f5; border-bottom: none; cursor: pointer; font-weight: 600; font-size: 12px;">📏 Lines (${lineCount})</button>` : ''}
+      ${polygonCount > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('polygons')" style="flex: 1; padding: 10px; border: none; background: #f5f5f5; border-bottom: none; cursor: pointer; font-weight: 600; font-size: 12px;">⬠ Polygons (${polygonCount})</button>` : ''}
+    </div>
+  `;
+
   const headerHTML = `
         <div style="background: linear-gradient(135deg, #667eea 0%, #57c236ff 100%); color: white; padding: 14px 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #512da8;">
             <div>
-                <div style="font-size: 16px;">✓ Selected Locations</div>
-                <div style="font-size: 24px; font-weight: 900; margin-top: 2px;">${count}</div>
+                <div style="font-size: 16px;">✓ Selected Features</div>
+                <div style="font-size: 24px; font-weight: 900; margin-top: 2px;">${totalCount}</div>
             </div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
                 <button title="Copy coordinates" onclick="copySelectedCoordinates()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📋 Copy</button>
                 <button title="Export as CSV" onclick="exportToCSV()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 CSV</button>
                 <button title="Export as Excel" onclick="exportToExcel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 Excel</button>
                 <button title="Export as GeoJSON" onclick="exportToGeoJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">🌍 GeoJSON</button>
-                <button title="Export as JSON" onclick="exportToJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📄 JSON</button>
                 <button title="Export as KML" onclick="exportToKML()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📍 KML</button>
-                <button title="Export as KMZ" onclick="exportToKMZ()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">🗜️ KMZ</button>
                 <button title="Export as SHP" onclick="exportToShp()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📦 SHP</button>
                 <button title="Minimize/Maximize" id="btnMinimizeSelection" onclick="toggleMinimizeSelection()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">−</button>
                 <button title="Close panel" onclick="closeSelectedPanel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">✕</button>
             </div>
         </div>
+        ${((markerCount + pointCount) > 0 || lineCount > 0 || polygonCount > 0) ? tabsHTML : ''}
         <div id="selectionPanelBody" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; max-height: 60vh;">
     `;
 
-  // Collect all unique keys from rowData
-  let allKeys = new Set();
-  selectedMarkersArray.forEach((marker) => {
-    if (marker.markerData && marker.markerData.rowData) {
-      Object.keys(marker.markerData.rowData).forEach((key) => {
+  // Build table for points (markers + point features)
+  let pointsTableHTML = buildAttributeTable(selectedMarkersArray.concat(selectedFeatures.points.map(p => ({ 
+    getLatLng: () => {
+      const coords = p.feature.geometry.coordinates;
+      return { lat: coords[1], lng: coords[0] };
+    },
+    markerData: { rowData: p.feature.properties || {} }
+  }))), 'Points', totalCount);
+
+  // Build table for lines
+  let linesTableHTML = buildAttributeTable(selectedFeatures.lines, 'Lines', totalCount, 'line');
+
+  // Build table for polygons
+  let polygonsTableHTML = buildAttributeTable(selectedFeatures.polygons, 'Polygons', totalCount, 'polygon');
+
+  const tablesHTML = `
+    ${(markerCount + pointCount) > 0 ? `<div id="tab-points" class="selection-tab" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+      ${pointsTableHTML}
+    </div>` : ''}
+    ${lineCount > 0 ? `<div id="tab-lines" class="selection-tab" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+      ${linesTableHTML}
+    </div>` : ''}
+    ${polygonCount > 0 ? `<div id="tab-polygons" class="selection-tab" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+      ${polygonsTableHTML}
+    </div>` : ''}
+  `;
+
+  // Add footer with summary
+  const footerHTML = `
+    <div style="background: #f0f0f0; padding: 10px 16px; border-top: 1px solid #ddd; font-size: 11px; color: #666;">
+        <div style="display: flex; justify-content: space-between;">
+            <span><strong>Total Selected:</strong> ${markerCount} points, ${lineCount} lines, ${polygonCount} polygons</span>
+            <span><strong>Action:</strong> Click row to zoom to feature</span>
+        </div>
+    </div>
+  `;
+
+  panelContainer.innerHTML = headerHTML + tablesHTML + footerHTML + '</div>';
+}
+
+function buildAttributeTable(data, type, totalCount, featureType = 'point') {
+  let tableHTML = '<div style="overflow: auto; flex: 1; padding: 8px;">';
+
+  const itemsToDisplay = type === 'Points' ? data.filter(d => d.getLatLng) : data;
+
+  if (itemsToDisplay.length === 0) {
+    tableHTML += `<p style="text-align: center; color: #999; padding: 20px;">No ${type.toLowerCase()} selected</p>`;
+  } else {
+    // Collect all unique keys
+    let allKeys = new Set();
+    itemsToDisplay.forEach((item) => {
+      const props = item.markerData?.rowData || item.feature?.properties || {};
+      Object.keys(props).forEach((key) => {
         const lowerKey = key.toLowerCase();
         if (!["latitude", "longitude", "lat", "lng"].includes(lowerKey)) {
           allKeys.add(key);
         }
       });
-    }
-  });
-  const additionalColumns = Array.from(allKeys);
+    });
+    const additionalColumns = Array.from(allKeys);
 
-  // Build table with selected markers data
-  let tableHTML = '<div style="overflow: auto; flex: 1; padding: 8px;">';
-
-  if (selectedMarkersArray.length === 0) {
-    tableHTML +=
-      '<p style="text-align: center; color: #999; padding: 20px;">No markers selected</p>';
-  } else {
-    tableHTML +=
-      '<table style="width: 100%; border-collapse: collapse; font-size: 11px;">';
-    tableHTML +=
-      '<thead style="position: sticky; top: 0; background: #764ba2; color: white; border-bottom: 2px solid #512da8; z-index: 1;">';
+    tableHTML += '<table style="width: 100%; border-collapse: collapse; font-size: 11px;">';
+    tableHTML += '<thead style="position: sticky; top: 0; background: #764ba2; color: white; border-bottom: 2px solid #512da8; z-index: 1;">';
     tableHTML += "<tr>";
-    tableHTML +=
-      '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white; position: sticky; left: 0; z-index: 2;">#</th>';
-    tableHTML +=
-      '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">Latitude</th>';
-    tableHTML +=
-      '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">Longitude</th>';
+    tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white; position: sticky; left: 0; z-index: 2;">#</th>';
+    
+    if (featureType === 'point') {
+      tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">Latitude</th>';
+      tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">Longitude</th>';
+    } else {
+      tableHTML += `<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">${featureType === 'line' ? 'Line' : 'Polygon'} Info</th>`;
+    }
 
     additionalColumns.forEach((col) => {
       tableHTML += `<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">${col}</th>`;
@@ -1096,21 +1242,34 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
     tableHTML += "</thead>";
     tableHTML += "<tbody>";
 
-    selectedMarkersArray.forEach((marker, index) => {
-      const latlng = marker.getLatLng();
+    itemsToDisplay.forEach((item, index) => {
+      let lat, lng, properties;
 
-      tableHTML += `
-                <tr style="border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s, transform 0.15s; background: white;" onmouseover="this.style.background='#f3e8ff'; this.style.borderLeft='3px solid #764ba2';" onmouseout="this.style.background='white'; this.style.borderLeft='';" onclick="zoomToMarker(${latlng.lat}, ${latlng.lng})">
-                    <td style="padding: 7px; border: 1px solid #eee; font-weight: 600; color: #764ba2; position: sticky; left: 0; background: inherit;">${index + 1}</td>
-                    <td style="padding: 7px; border: 1px solid #eee;">${latlng.lat.toFixed(6)}</td>
-                    <td style="padding: 7px; border: 1px solid #eee;">${latlng.lng.toFixed(6)}</td>
-      `;
+      if (featureType === 'point') {
+        const latlng = item.getLatLng();
+        lat = latlng.lat;
+        lng = latlng.lng;
+        properties = item.markerData?.rowData || {};
+
+        tableHTML += `
+          <tr style="border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f3e8ff';" onmouseout="this.style.background='white';" onclick="zoomToMarker(${lat}, ${lng})">
+            <td style="padding: 7px; border: 1px solid #eee; font-weight: 600; color: #764ba2; position: sticky; left: 0; background: inherit;">${index + 1}</td>
+            <td style="padding: 7px; border: 1px solid #eee;">${lat.toFixed(6)}</td>
+            <td style="padding: 7px; border: 1px solid #eee;">${lng.toFixed(6)}</td>
+        `;
+      } else {
+        properties = item.feature?.properties || {};
+        const geomType = item.feature?.geometry?.type || 'Unknown';
+
+        tableHTML += `
+          <tr style="border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f3e8ff';" onmouseout="this.style.background='white';">
+            <td style="padding: 7px; border: 1px solid #eee; font-weight: 600; color: #764ba2; position: sticky; left: 0; background: inherit;">${index + 1}</td>
+            <td style="padding: 7px; border: 1px solid #eee; font-size: 10px; color: #999;">${geomType}</td>
+        `;
+      }
 
       additionalColumns.forEach((col) => {
-        let val = "";
-        if (marker.markerData && marker.markerData.rowData && marker.markerData.rowData[col] !== undefined && marker.markerData.rowData[col] !== null) {
-          val = marker.markerData.rowData[col];
-        }
+        let val = properties[col] !== undefined && properties[col] !== null ? properties[col] : "";
         let safeVal = String(val).replace(/"/g, '&quot;');
         tableHTML += `<td style="padding: 7px; border: 1px solid #eee; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${safeVal}">${safeVal}</td>`;
       });
@@ -1123,18 +1282,28 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer) {
   }
 
   tableHTML += "</div>";
+  return tableHTML;
+}
 
-  // Add footer with summary
-  const footerHTML = `
-    <div style="background: #f0f0f0; padding: 10px 16px; border-top: 1px solid #ddd; font-size: 11px; color: #666;">
-        <div style="display: flex; justify-content: space-between;">
-            <span><strong>Total Selected:</strong> ${count}</span>
-            <span><strong>Action:</strong> Click row to zoom to location</span>
-        </div>
-    </div>
-  `;
+function switchSelectionTab(tabName) {
+  // Hide all tabs
+  document.querySelectorAll('.selection-tab').forEach(tab => {
+    tab.style.display = 'none';
+  });
+  
+  // Show selected tab
+  const selectedTab = document.getElementById(`tab-${tabName}`);
+  if (selectedTab) {
+    selectedTab.style.display = 'flex';
+  }
 
-  panelContainer.innerHTML = headerHTML + tableHTML + footerHTML + '</div>';
+  // Update button styles
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.style.background = '#f5f5f5';
+    btn.style.borderBottom = 'none';
+  });
+  event.target.style.background = 'white';
+  event.target.style.borderBottom = '2px solid #667eea';
 }
 
 function toggleMinimizeSelection() {

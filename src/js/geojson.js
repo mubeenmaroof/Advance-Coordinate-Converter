@@ -435,6 +435,9 @@ function showGeoJsonOnMap() {
       const geoLayer = L.geoJSON(currentGeoJsonData, {
         renderer: renderer,
         onEachFeature: function (feature, layer) {
+          // Store the feature data on the layer for selection purposes
+          layer.feature = feature;
+          
           if (feature.properties) {
             const props = { ...feature.properties };
             if (feature.geometry.type.includes("Polygon")) props.TYPE = "Polygon";
