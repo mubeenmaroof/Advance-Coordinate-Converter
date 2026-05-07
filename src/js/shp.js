@@ -79,6 +79,7 @@ async function handleShpFiles(files) {
         throw new Error(error);
       } else if (type === 'complete') {
         currentShpData = geojson;
+        currentShpData._sourceFileName = fileMap.shp.name;
         processShpData(geojson);
         if (typeof syncUploadUI === 'function') syncUploadUI();
 
@@ -211,16 +212,22 @@ function renderShpPreview() {
     return;
   }
 
-  // Discover all unique property keys
+  // Discover all unique property keys and geometry types
   const propertyKeys = new Set();
-  shpCoordinateStore.slice(0, 10).forEach(c => {
+  const geomTypes = new Set();
+  shpCoordinateStore.forEach(c => {
     if (c.properties) {
       Object.keys(c.properties).forEach(key => propertyKeys.add(key));
     }
+    if (c.geometryType) geomTypes.add(c.geometryType);
   });
 
   const sortedKeys = Array.from(propertyKeys).sort();
   const displayCount = Math.min(shpCoordinateStore.length, 10);
+
+  const categoryCounts = getShpCategoryCounts(currentShpData);
+  const categorySelectionHtml = renderShpCategoryCheckboxes(categoryCounts);
+  const hasAnyData = Object.values(categoryCounts).some(value => value > 0);
 
   let html = `
     <div class="result">
@@ -231,6 +238,10 @@ function renderShpPreview() {
             Features: <b>${shpCoordinateStore.length}</b> | 
             Displaying: <b>First ${displayCount} records</b>
           </p>
+          <div style="margin-top: 12px; padding: 12px; background: ${hasAnyData ? '#f0f7ff' : '#fff3cd'}; border-left: 3px solid ${hasAnyData ? '#667eea' : '#ffc107'}; border-radius: 4px; font-size: 0.95em;">
+            <strong style="color: ${hasAnyData ? '#667eea' : '#856404'};">📋 Geometry Categories Found:</strong>
+            <div style="margin-top: 8px;">${categorySelectionHtml}</div>
+          </div>
         </div>
       </div>
 
@@ -255,6 +266,7 @@ function renderShpPreview() {
                 ${sortedKeys.map(key => `<td style="padding: 10px;">${c.properties && c.properties[key] !== undefined ? c.properties[key] : ''}</td>`).join('')}
               </tr>
             `).join('')}
+            ${shpCoordinateStore.length > displayCount ? `<tr><td colspan="${sortedKeys.length + 4}" style="text-align: center; padding: 15px; background: #f8f9fa; font-style: italic; color: #666;">Showing first ${displayCount} of ${shpCoordinateStore.length} rows. Use "Show on Map" to see all spatial data.</td></tr>` : ''}
           </tbody>
         </table>
       </div>
@@ -269,6 +281,201 @@ function renderShpPreview() {
   }
 }
 
+function getShpCategoryCounts(geoJson) {
+  const counts = {
+    Points: 0,
+    Lines: 0,
+    Polygons: 0
+  };
+
+  if (!geoJson) {
+    console.warn("[SHP] No geoJson data to count categories");
+    return counts;
+  }
+
+  let features = [];
+  const collections = Array.isArray(geoJson) ? geoJson : [geoJson];
+  collections.forEach(collection => {
+    if (collection.type === 'FeatureCollection' && Array.isArray(collection.features)) {
+      features = features.concat(collection.features);
+    } else if (collection.type === 'Feature') {
+      features.push(collection);
+    }
+  });
+
+  if (features.length === 0) {
+    console.warn("[SHP] No features found in geoJson");
+    return counts;
+  }
+
+  features.forEach(feature => {
+    const geom = feature.geometry;
+    if (!geom || !geom.type) return;
+
+    if (['Point', 'MultiPoint'].includes(geom.type)) counts.Points += 1;
+    else if (['LineString', 'MultiLineString'].includes(geom.type)) counts.Lines += 1;
+    else if (['Polygon', 'MultiPolygon'].includes(geom.type)) counts.Polygons += 1;
+    else if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries)) {
+      geom.geometries.forEach(sub => {
+        if (!sub || !sub.type) return;
+        if (['Point', 'MultiPoint'].includes(sub.type)) counts.Points += 1;
+        else if (['LineString', 'MultiLineString'].includes(sub.type)) counts.Lines += 1;
+        else if (['Polygon', 'MultiPolygon'].includes(sub.type)) counts.Polygons += 1;
+      });
+    }
+  });
+
+  console.log("[SHP] Category counts:", counts);
+  return counts;
+}
+
+function renderShpCategoryCheckboxes(counts) {
+  const categories = ['Points', 'Lines', 'Polygons'];
+  return `<div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 8px; padding: 8px 0;">${categories.map(category => {
+      const count = counts[category] || 0;
+      const isDisabled = count === 0;
+      return `<label style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: ${isDisabled ? '#999' : '#111'}; cursor: ${isDisabled ? 'not-allowed' : 'pointer'}; opacity: ${isDisabled ? '0.5' : '1'};">
+        <input type="checkbox" name="shpExportCategory" value="${category}" ${count > 0 ? 'checked' : ''} ${isDisabled ? 'disabled' : ''} style="cursor: ${isDisabled ? 'not-allowed' : 'pointer'};" />
+        <span>${category} (${count})</span>
+      </label>`;
+    }).join('')}</div>`;
+}
+
+function getCategoriesForShpFeature(feature) {
+  if (!feature || !feature.geometry || !feature.geometry.type) return [];
+  const type = feature.geometry.type;
+  if (type === 'Point' || type === 'MultiPoint') return ['Points'];
+  if (type === 'LineString' || type === 'MultiLineString') return ['Lines'];
+  if (type === 'Polygon' || type === 'MultiPolygon') return ['Polygons'];
+  if (type === 'GeometryCollection' && Array.isArray(feature.geometry.geometries)) {
+    const found = new Set();
+    feature.geometry.geometries.forEach(sub => {
+      if (!sub || !sub.type) return;
+      if (['Point', 'MultiPoint'].includes(sub.type)) found.add('Points');
+      else if (['LineString', 'MultiLineString'].includes(sub.type)) found.add('Lines');
+      else if (['Polygon', 'MultiPolygon'].includes(sub.type)) found.add('Polygons');
+    });
+    return Array.from(found);
+  }
+  return [];
+}
+
+function filterShpFeaturesByCategories(featureCollection, categories) {
+  if (!featureCollection || featureCollection.type !== 'FeatureCollection' || !Array.isArray(featureCollection.features)) {
+    return { type: 'FeatureCollection', features: [] };
+  }
+
+  const selected = new Set(categories);
+  const filtered = featureCollection.features.filter(feature => {
+    return getCategoriesForShpFeature(feature).some(cat => selected.has(cat));
+  });
+
+  return { type: 'FeatureCollection', features: filtered };
+}
+
+function shpFeatureCollectionToDataStore(featureCollection) {
+  const result = [];
+  if (!featureCollection || featureCollection.type !== 'FeatureCollection' || !Array.isArray(featureCollection.features)) {
+    return result;
+  }
+
+  featureCollection.features.forEach((feature, featureIndex) => {
+    const properties = feature.properties || {};
+    const geometry = feature.geometry;
+
+    if (!geometry) return;
+
+    // For Points, add them to the store
+    if (geometry.type === "Point") {
+      result.push({
+        lat: geometry.coordinates[1],
+        lng: geometry.coordinates[0],
+        properties: properties,
+        geometryType: geometry.type,
+        featureIndex: featureIndex,
+        coordIndex: 0
+      });
+    }
+    // For shapes, use the optimized representative point drill-down
+    else {
+      const repPoint = getRepresentativePoint(geometry);
+      if (repPoint) {
+        result.push({
+          lat: repPoint[1],
+          lng: repPoint[0],
+          properties: properties,
+          geometryType: geometry.type,
+          featureIndex: featureIndex,
+          coordIndex: 0,
+          isVertex: true
+        });
+      }
+    }
+  });
+
+  return result;
+}
+
+function exportShpCategory(format, featureCollection, customFileName) {
+  if (!featureCollection || !featureCollection.features || featureCollection.features.length === 0) {
+    console.error('[SHP Export] Empty feature collection or missing features');
+    alert(`No features available in ${customFileName}`);
+    return;
+  }
+
+  console.log(`[SHP Export] Exporting ${featureCollection.features.length} features as ${format}: ${customFileName}`);
+
+  try {
+    if (format === 'csv' || format === 'xlsx') {
+      const dataStore = shpFeatureCollectionToDataStore(featureCollection);
+      if (dataStore.length === 0) {
+        console.error('[SHP Export] No dataStore rows generated from features');
+        alert(`No rows available for export.`);
+        return;
+      }
+      console.log(`[SHP Export] Generated ${dataStore.length} rows for CSV/XLSX export`);
+      handleGenericExport(format, dataStore, 'shpFile', customFileName);
+      return;
+    }
+
+    if (format === 'geojson' && window.exportToGeoJSON) {
+      console.log('[SHP Export] Calling exportToGeoJSON');
+      window.exportToGeoJSON(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'json' && window.exportToJSON) {
+      console.log('[SHP Export] Calling exportToJSON');
+      window.exportToJSON(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'kml' && window.exportToKML) {
+      console.log('[SHP Export] Calling exportToKML');
+      window.exportToKML(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'kmz' && window.exportToKMZ) {
+      console.log('[SHP Export] Calling exportToKMZ');
+      window.exportToKMZ(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'shp' && window.exportToShp) {
+      console.log('[SHP Export] Calling exportToShp');
+      window.exportToShp(featureCollection, customFileName);
+      return;
+    }
+
+    console.error(`[SHP Export] Unsupported format: ${format}`);
+    alert(`Unsupported export format: ${format}`);
+  } catch (error) {
+    console.error('[SHP Export] Error during export:', error);
+    alert(`Export failed: ${error.message}`);
+  }
+}
+
 function showShpOnMap() {
   if (!shpCoordinateStore || shpCoordinateStore.length === 0) {
     alert("No coordinates found.");
@@ -278,7 +485,7 @@ function showShpOnMap() {
   showTab('map');
 
   const totalFeatures = shpCoordinateStore.length;
-  showProcessingOverlay(`Preparing ${totalFeatures} features...`);
+  showProcessingOverlay(`Preparing ${totalFeatures} features...`, 0);
 
   setTimeout(() => {
     if (!map) initMap();
@@ -358,8 +565,7 @@ function showShpOnMap() {
       if (currentIndex < allFeatures.length) {
         // Update progress in overlay
         const progress = Math.floor((currentIndex / allFeatures.length) * 100);
-        const statusH3 = document.getElementById("processingStatus");
-        if (statusH3) statusH3.innerText = `Rendering Map: ${progress}%`;
+        updateProcessingProgress(progress);
 
         // Use requestAnimationFrame for smoother UI
         requestAnimationFrame(renderNextChunk);
@@ -420,10 +626,61 @@ window.clearShpData = clearShpData;
 window.downloadShpResults = downloadShpResults;
 
 function downloadShpResults() {
-  if (!shpCoordinateStore || shpCoordinateStore.length === 0) {
+  if (!currentShpData) {
     alert("Please load valid Shapefile data first.");
     return;
   }
+
+  // Handle case where currentShpData might be an array of FeatureCollections
+  const collections = Array.isArray(currentShpData) ? currentShpData : [currentShpData];
+  const allFeatures = [];
+  collections.forEach(col => {
+    if (col.features) allFeatures.push(...col.features);
+  });
+
+  if (allFeatures.length === 0) {
+    alert("Please load valid Shapefile data first.");
+    return;
+  }
+
+  // Create a combined FeatureCollection for filtering
+  const combinedFeatureCollection = {
+    type: 'FeatureCollection',
+    features: allFeatures,
+    _sourceFileName: (Array.isArray(currentShpData) ? currentShpData[0]?._sourceFileName : currentShpData?._sourceFileName) || "shp_export"
+  };
+
   const format = document.getElementById("shpExportFormat")?.value || "csv";
-  handleGenericExport(format, shpCoordinateStore, "shpFile");
+  const selectedCategories = Array.from(document.querySelectorAll('input[name="shpExportCategory"]:checked')).map(el => el.value);
+
+  console.log("[SHP Download] Format:", format);
+  console.log("[SHP Download] Selected categories:", selectedCategories);
+  console.log("[SHP Download] Total features in combined data:", allFeatures.length);
+
+  if (selectedCategories.length === 0) {
+    alert("Please select at least one category to export.");
+    return;
+  }
+
+  console.log("[SHP Download] Starting export...");
+
+  selectedCategories.forEach(category => {
+    const filtered = filterShpFeaturesByCategories(combinedFeatureCollection, [category]);
+    console.log(`[SHP Download] Filtered ${category}:`, filtered.features.length, "features");
+
+    if (filtered.features.length === 0) {
+      console.warn(`[SHP Download] No features found for category: ${category}`);
+      return;
+    }
+
+    const cleanBase = fileNameWithoutExtension(combinedFeatureCollection._sourceFileName);
+    const extension = format === 'kmz' ? 'kmz' : format === 'geojson' ? 'geojson' : format === 'json' ? 'json' : format;
+    const customFileName = `${cleanBase}_${suffix}.${extension}`;
+    console.log(`[SHP Download] Calling exportShpCategory for ${category}:`, customFileName);
+    exportShpCategory(format, filtered, customFileName);
+  });
+}
+
+function fileNameWithoutExtension(name) {
+  return name ? name.replace(/\.[^.]+$/, '') : 'export';
 }

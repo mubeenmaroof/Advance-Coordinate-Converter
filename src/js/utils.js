@@ -176,13 +176,13 @@ function getExportOptionsHTML(excludeFormat, selectId) {
   return html;
 }
 
-function handleGenericExport(format, dataStore, inputId) {
+function handleGenericExport(format, dataStore, inputId, customFileName) {
   if (!dataStore || dataStore.length === 0) {
     alert("No data available to export.");
     return;
   }
 
-  const finalFileName = window.generateExportFileName ? window.generateExportFileName(inputId, "Converted", format) : `export_${new Date().getTime()}.${format}`;
+  const finalFileName = customFileName || (window.generateExportFileName ? window.generateExportFileName(inputId, "Converted", format) : `export_${new Date().getTime()}.${format}`);
 
   // PRIORITY 1: For spatial formats (GeoJSON, KML, SHP), try to use the original full data if available
   // This preserves complex geometries (Lines, Polygons) which are otherwise flattened in dataStore

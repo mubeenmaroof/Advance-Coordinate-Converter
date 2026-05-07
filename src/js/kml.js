@@ -25,11 +25,14 @@ async function handleKmlFile(file) {
   } else {
     const reader = new FileReader();
     reader.onload = function (e) {
-      showProcessingOverlay("Parsing KML Data...");
+      showProcessingOverlay("Parsing KML Data...", 10);
       setTimeout(() => {
+        updateProcessingProgress(50);
         processKmlData(e.target.result, file.name);
+        updateProcessingProgress(90);
         if (typeof syncUploadUI === 'function') syncUploadUI();
-        hideProcessingOverlay();
+        updateProcessingProgress(100);
+        setTimeout(() => hideProcessingOverlay(), 200);
       }, 100);
     };
     reader.readAsText(file);
@@ -38,8 +41,10 @@ async function handleKmlFile(file) {
 
 async function handleKmzFile(file) {
   try {
-    showProcessingOverlay("Extracting KMZ Archive...");
+    showProcessingOverlay("Extracting KMZ Archive...", 5);
     const zip = await JSZip.loadAsync(file);
+    updateProcessingProgress(30);
+
     const kmlFile = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith('.kml'));
 
     if (!kmlFile) {
@@ -47,10 +52,16 @@ async function handleKmzFile(file) {
       throw new Error("No KML file found inside KMZ archive.");
     }
 
+    updateProcessingProgress(50);
     const kmlContent = await kmlFile.async("string");
+    updateProcessingProgress(70);
+
     processKmlData(kmlContent, file.name);
+    updateProcessingProgress(90);
+
     if (typeof syncUploadUI === 'function') syncUploadUI();
-    hideProcessingOverlay();
+    updateProcessingProgress(100);
+    setTimeout(() => hideProcessingOverlay(), 200);
   } catch (error) {
     console.error("❌ Error reading KMZ:", error);
     hideProcessingOverlay();
@@ -124,6 +135,7 @@ function processKmlData(kmlString, fileName) {
     }
 
     currentKmlData = geoJsonData;
+    currentKmlData._sourceFileName = fileName;
     kmlCoordinateStore = extractCoordinatesFromKmlGeoJson(geoJsonData);
 
     if (kmlCoordinateStore.length > 0) {
@@ -227,6 +239,10 @@ function renderKmlSuccessUI(fileName, count) {
   const sortedKeys = Array.from(propertyKeys).sort();
   const displayCount = Math.min(count, 10);
 
+  const categoryCounts = getKmlCategoryCounts(currentKmlData);
+  const categorySelectionHtml = renderKmlCategoryCheckboxes(categoryCounts);
+  const hasAnyData = Object.values(categoryCounts).some(value => value > 0);
+
   let html = `<div class="result">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
       <div>
@@ -236,6 +252,10 @@ function renderKmlSuccessUI(fileName, count) {
           Coordinates: <b>${count}</b> | 
           Types: <b>${Array.from(geomTypes).join(', ') || 'N/A'}</b>
         </p>
+        <div style="margin-top: 12px; padding: 12px; background: ${hasAnyData ? '#f0f7ff' : '#fff3cd'}; border-left: 3px solid ${hasAnyData ? '#667eea' : '#ffc107'}; border-radius: 4px; font-size: 0.95em;">
+          <strong style="color: ${hasAnyData ? '#667eea' : '#856404'};">📋 Geometry Categories Found:</strong>
+          <div style="margin-top: 8px;">${categorySelectionHtml}</div>
+        </div>
       </div>
     </div>
 
@@ -274,6 +294,201 @@ function renderKmlSuccessUI(fileName, count) {
   </div>`;
 
   resultDiv.innerHTML = html;
+}
+
+function getKmlCategoryCounts(geoJson) {
+  const counts = {
+    Points: 0,
+    Lines: 0,
+    Polygons: 0
+  };
+
+  if (!geoJson) {
+    console.warn("[KML] No geoJson data to count categories");
+    return counts;
+  }
+
+  let features = [];
+  if (geoJson.type === 'FeatureCollection' && Array.isArray(geoJson.features)) {
+    features = geoJson.features;
+  } else if (geoJson.type === 'Feature') {
+    features = [geoJson];
+  }
+
+  if (features.length === 0) {
+    console.warn("[KML] No features found in geoJson");
+    return counts;
+  }
+
+  features.forEach(feature => {
+    const geom = feature.geometry;
+    if (!geom || !geom.type) return;
+
+    if (['Point', 'MultiPoint'].includes(geom.type)) counts.Points += 1;
+    else if (['LineString', 'MultiLineString'].includes(geom.type)) counts.Lines += 1;
+    else if (['Polygon', 'MultiPolygon'].includes(geom.type)) counts.Polygons += 1;
+    else if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries)) {
+      geom.geometries.forEach(sub => {
+        if (!sub || !sub.type) return;
+        if (['Point', 'MultiPoint'].includes(sub.type)) counts.Points += 1;
+        else if (['LineString', 'MultiLineString'].includes(sub.type)) counts.Lines += 1;
+        else if (['Polygon', 'MultiPolygon'].includes(sub.type)) counts.Polygons += 1;
+      });
+    }
+  });
+
+  console.log("[KML] Category counts:", counts);
+  return counts;
+}
+
+function renderKmlCategoryCheckboxes(counts) {
+  const categories = ['Points', 'Lines', 'Polygons'];
+  return `<div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 8px; padding: 8px 0;">${categories.map(category => {
+      const count = counts[category] || 0;
+      const isDisabled = count === 0;
+      return `<label style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: ${isDisabled ? '#999' : '#111'}; cursor: ${isDisabled ? 'not-allowed' : 'pointer'}; opacity: ${isDisabled ? '0.5' : '1'};">
+        <input type="checkbox" name="kmlExportCategory" value="${category}" ${count > 0 ? 'checked' : ''} ${isDisabled ? 'disabled' : ''} style="cursor: ${isDisabled ? 'not-allowed' : 'pointer'};" />
+        <span>${category} (${count})</span>
+      </label>`;
+    }).join('')}</div>`;
+}
+
+function getCategoriesForFeature(feature) {
+  if (!feature || !feature.geometry || !feature.geometry.type) return [];
+  const type = feature.geometry.type;
+  if (type === 'Point' || type === 'MultiPoint') return ['Points'];
+  if (type === 'LineString' || type === 'MultiLineString') return ['Lines'];
+  if (type === 'Polygon' || type === 'MultiPolygon') return ['Polygons'];
+  if (type === 'GeometryCollection' && Array.isArray(feature.geometry.geometries)) {
+    const found = new Set();
+    feature.geometry.geometries.forEach(sub => {
+      if (!sub || !sub.type) return;
+      if (['Point', 'MultiPoint'].includes(sub.type)) found.add('Points');
+      else if (['LineString', 'MultiLineString'].includes(sub.type)) found.add('Lines');
+      else if (['Polygon', 'MultiPolygon'].includes(sub.type)) found.add('Polygons');
+    });
+    return Array.from(found);
+  }
+  return [];
+}
+
+function filterKmlFeaturesByCategories(featureCollection, categories) {
+  if (!featureCollection || featureCollection.type !== 'FeatureCollection' || !Array.isArray(featureCollection.features)) {
+    return { type: 'FeatureCollection', features: [] };
+  }
+
+  const selected = new Set(categories);
+  const filtered = featureCollection.features.filter(feature => {
+    return getCategoriesForFeature(feature).some(cat => selected.has(cat));
+  });
+
+  return { type: 'FeatureCollection', features: filtered };
+}
+
+function kmlFeatureCollectionToDataStore(featureCollection) {
+  const result = [];
+  if (!featureCollection || featureCollection.type !== 'FeatureCollection' || !Array.isArray(featureCollection.features)) {
+    return result;
+  }
+
+  featureCollection.features.forEach((feature, featureIndex) => {
+    const coords = [];
+    const geom = feature.geometry;
+    if (!geom || !geom.type) return;
+
+    if (geom.type === 'Point') {
+      coords.push(geom.coordinates);
+    } else if (geom.type === 'MultiPoint' || geom.type === 'LineString') {
+      coords.push(...geom.coordinates);
+    } else if (geom.type === 'MultiLineString' || geom.type === 'Polygon') {
+      geom.coordinates.forEach(item => coords.push(...item));
+    } else if (geom.type === 'MultiPolygon') {
+      geom.coordinates.forEach(polygon => {
+        polygon.forEach(ring => coords.push(...ring));
+      });
+    } else if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries)) {
+      geom.geometries.forEach(sub => {
+        if (!sub || !sub.type || !sub.coordinates) return;
+        if (sub.type === 'Point') coords.push(sub.coordinates);
+        else if (sub.type === 'MultiPoint' || sub.type === 'LineString') coords.push(...sub.coordinates);
+        else if (sub.type === 'MultiLineString' || sub.type === 'Polygon') sub.coordinates.forEach(item => coords.push(...item));
+        else if (sub.type === 'MultiPolygon') sub.coordinates.forEach(polygon => polygon.forEach(ring => coords.push(...ring)));
+      });
+    }
+
+    coords.forEach(coord => {
+      if (Array.isArray(coord) && coord.length >= 2) {
+        result.push({
+          lat: coord[1],
+          lng: coord[0],
+          properties: feature.properties || {},
+          rowIndex: featureIndex + 1
+        });
+      }
+    });
+  });
+
+  return result;
+}
+
+function exportKmlCategory(format, featureCollection, customFileName) {
+  if (!featureCollection || !featureCollection.features || featureCollection.features.length === 0) {
+    console.error('[KML Export] Empty feature collection or missing features');
+    alert(`No features available in ${customFileName}`);
+    return;
+  }
+
+  console.log(`[KML Export] Exporting ${featureCollection.features.length} features as ${format}: ${customFileName}`);
+
+  try {
+    if (format === 'csv' || format === 'xlsx') {
+      const dataStore = kmlFeatureCollectionToDataStore(featureCollection);
+      if (dataStore.length === 0) {
+        console.error('[KML Export] No dataStore rows generated from features');
+        alert(`No rows available for export.`);
+        return;
+      }
+      console.log(`[KML Export] Generated ${dataStore.length} rows for CSV/XLSX export`);
+      handleGenericExport(format, dataStore, 'kmlFile', customFileName);
+      return;
+    }
+
+    if (format === 'geojson' && window.exportToGeoJSON) {
+      console.log('[KML Export] Calling exportToGeoJSON');
+      window.exportToGeoJSON(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'json' && window.exportToJSON) {
+      console.log('[KML Export] Calling exportToJSON');
+      window.exportToJSON(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'kml' && window.exportToKML) {
+      console.log('[KML Export] Calling exportToKML');
+      window.exportToKML(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'kmz' && window.exportToKMZ) {
+      console.log('[KML Export] Calling exportToKMZ');
+      window.exportToKMZ(featureCollection, customFileName);
+      return;
+    }
+
+    if (format === 'shp' && window.exportToShp) {
+      console.log('[KML Export] Calling exportToShp');
+      window.exportToShp(featureCollection, customFileName);
+      return;
+    }
+
+    console.error(`[KML Export] Unsupported format: ${format}`);
+    alert(`Unsupported export format: ${format}`);
+  } catch (error) {
+    console.error('[KML Export] Error during export:', error);
+    alert(`Export failed: ${error.message}`);
+  }
 }
 
 function showKmlOnMap() {
@@ -382,10 +597,43 @@ window.clearKmlData = clearKmlData;
 window.downloadKmlResults = downloadKmlResults;
 
 function downloadKmlResults() {
-  if (!kmlCoordinateStore || kmlCoordinateStore.length === 0) {
+  if (!currentKmlData || !currentKmlData.features || currentKmlData.features.length === 0) {
     alert("Please load valid KML/KMZ data first.");
     return;
   }
+
   const format = document.getElementById("kmlExportFormat")?.value || "csv";
-  handleGenericExport(format, kmlCoordinateStore, "kmlFile");
+  const selectedCategories = Array.from(document.querySelectorAll('input[name="kmlExportCategory"]:checked')).map(el => el.value);
+
+  console.log("[KML Download] Format:", format);
+  console.log("[KML Download] Selected categories:", selectedCategories);
+  console.log("[KML Download] Total features in currentKmlData:", currentKmlData.features.length);
+
+  if (selectedCategories.length === 0) {
+    alert("Please select at least one category to export.");
+    return;
+  }
+
+  console.log("[KML Download] Starting export...");
+
+  selectedCategories.forEach(category => {
+    const filtered = filterKmlFeaturesByCategories(currentKmlData, [category]);
+    console.log(`[KML Download] Filtered ${category}:`, filtered.features.length, "features");
+    
+    if (filtered.features.length === 0) {
+      console.warn(`[KML Download] No features found for category: ${category}`);
+      return;
+    }
+
+    const cleanBase = fileNameWithoutExtension(currentKmlData._sourceFileName || "kml_export");
+    const suffix = category.toLowerCase();
+    const extension = format === 'kmz' ? 'kmz' : format === 'geojson' ? 'geojson' : format === 'json' ? 'json' : format;
+    const customFileName = `${cleanBase}_${suffix}.${extension}`;
+    console.log(`[KML Download] Calling exportKmlCategory for ${category}:`, customFileName);
+    exportKmlCategory(format, filtered, customFileName);
+  });
+}
+
+function fileNameWithoutExtension(name) {
+  return name ? name.replace(/\.[^.]+$/, '') : 'export';
 }

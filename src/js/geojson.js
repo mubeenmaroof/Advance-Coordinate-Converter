@@ -30,14 +30,18 @@ function handleGeoJsonFile(file) {
   const reader = new FileReader();
   reader.onload = function (e) {
     try {
-      showProcessingOverlay("Parsing JSON Data...");
+      showProcessingOverlay("Parsing JSON Data...", 10);
       setTimeout(() => {
+        updateProcessingProgress(30);
         const jsonData = JSON.parse(e.target.result);
+        updateProcessingProgress(50);
         jsonMappingState.data = jsonData;
         jsonMappingState.fileName = file.name;
         processGeoJsonData(jsonData, file.name);
+        updateProcessingProgress(80);
         if (typeof syncUploadUI === 'function') syncUploadUI();
-        hideProcessingOverlay();
+        updateProcessingProgress(100);
+        setTimeout(() => hideProcessingOverlay(), 200);
       }, 100);
     } catch (error) {
       console.error("❌ Error parsing JSON:", error);

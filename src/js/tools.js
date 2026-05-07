@@ -40,22 +40,28 @@ function triggerFileDownload(binaryData, fileName) {
   document.body.removeChild(a);
 }
 
-function showProcessingOverlay(status = "Processing Data...") {
+function showProcessingOverlay(status = "Processing Data...", initialProgress = 0) {
   const overlay = document.getElementById("processingOverlay");
   const statusEl = document.getElementById("processingStatus");
   const progressEl = document.getElementById("processingProgressBar");
+  const percentageEl = document.getElementById("processingPercentage");
 
-  if (overlay && statusEl && progressEl) {
+  if (overlay && statusEl && progressEl && percentageEl) {
     statusEl.innerText = status;
-    progressEl.style.width = "0%";
+    progressEl.style.width = initialProgress + "%";
+    percentageEl.innerText = Math.round(initialProgress) + "%";
     overlay.style.display = "flex";
   }
 }
 
 function updateProcessingProgress(progress) {
   const progressEl = document.getElementById("processingProgressBar");
-  if (progressEl) {
-    progressEl.style.width = progress + "%";
+  const percentageEl = document.getElementById("processingPercentage");
+
+  if (progressEl && percentageEl) {
+    const percentage = Math.max(0, Math.min(100, progress));
+    progressEl.style.width = percentage + "%";
+    percentageEl.innerText = Math.round(percentage) + "%";
   }
 }
 

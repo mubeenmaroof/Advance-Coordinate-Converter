@@ -21,10 +21,13 @@ function handleGpxUpload(event) {
 function handleGpxFile(file) {
   const reader = new FileReader();
   reader.onload = function (e) {
-    showProcessingOverlay("Parsing GPX Data...");
+    showProcessingOverlay("Parsing GPX Data...", 10);
     setTimeout(() => {
+      updateProcessingProgress(50);
       processGpxData(e.target.result, file.name);
-      hideProcessingOverlay();
+      updateProcessingProgress(90);
+      updateProcessingProgress(100);
+      setTimeout(() => hideProcessingOverlay(), 200);
     }, 100);
   };
   reader.readAsText(file);

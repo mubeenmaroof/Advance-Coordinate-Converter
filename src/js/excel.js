@@ -33,37 +33,49 @@ function handleFile(file) {
   const reader = new FileReader();
   reader.onload = function (e) {
     try {
-      showProcessingOverlay("Reading File...");
+      showProcessingOverlay("Reading File...", 10);
       window.excelFileExt = file.name.split('.').pop().toLowerCase();
       if (window.excelFileExt === 'xls') window.excelFileExt = 'xlsx'; // treat xls as xlsx for export options
       setTimeout(() => {
+        updateProcessingProgress(30);
         console.log("📖 File loaded, processing...");
         let data;
         if (file.name.endsWith(".csv")) {
           console.log("🔄 Processing as CSV");
+          updateProcessingProgress(50);
           const text = e.target.result;
           data = parseCSV(text);
           window.excelWorkbook = null;
           processExcelData(data);
+          updateProcessingProgress(80);
           if (typeof syncUploadUI === 'function') syncUploadUI();
         } else {
           console.log("🔄 Processing as Excel (.xlsx/.xls)");
+          updateProcessingProgress(40);
           const workbook = XLSX.read(e.target.result, { type: "binary" });
+          updateProcessingProgress(60);
           window.excelWorkbook = workbook;
           if (workbook.SheetNames.length > 1) {
             console.log("📑 Multiple sheets found:", workbook.SheetNames.length);
             displaySheetSelection(workbook);
+            updateProcessingProgress(100);
+            setTimeout(() => hideProcessingOverlay(), 200);
           } else {
             console.log("📊 Single sheet found");
+            updateProcessingProgress(70);
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
             data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             processExcelData(data, sheetName);
+            updateProcessingProgress(90);
             if (typeof syncUploadUI === 'function') syncUploadUI();
           }
         }
+        if (window.excelWorkbook && window.excelWorkbook.SheetNames.length === 1) {
+          updateProcessingProgress(100);
+          setTimeout(() => hideProcessingOverlay(), 200);
+        }
         console.log("✅ File processed successfully");
-        hideProcessingOverlay();
       }, 100);
     } catch (error) {
       console.error("❌ Error reading file:", error);
@@ -113,11 +125,14 @@ function selectSheet(sheetIndex) {
   const workbook = window.excelWorkbook;
   const sheetName = workbook.SheetNames[sheetIndex];
   const sheet = workbook.Sheets[sheetName];
-  showProcessingOverlay(`Processing Sheet: ${sheetName}...`);
+  showProcessingOverlay(`Processing Sheet: ${sheetName}...`, 10);
   setTimeout(() => {
+    updateProcessingProgress(50);
     const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    updateProcessingProgress(80);
     processExcelData(data, sheetName);
-    hideProcessingOverlay();
+    updateProcessingProgress(100);
+    setTimeout(() => hideProcessingOverlay(), 200);
   }, 100);
 }
 

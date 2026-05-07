@@ -2341,204 +2341,243 @@ function searchLocation() {
 }
 
 function exportToKML(dataSource, customFileName) {
+  console.log("[exportToKML] Starting with:", { dataSource, customFileName });
   const features = collectAllMapFeatures(dataSource);
+  console.log("[exportToKML] Collected features:", features.length);
 
   if (features.length === 0) {
+    console.error("[exportToKML] No features to export");
     alert("No features to export");
     return;
   }
 
-  let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
-  kml += "<Document>\n";
-  kml += "<name>Exported Data</name>\n";
-  kml += "<description>Data exported from Advanced Coordinate Converter</description>\n";
+  try {
+    let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
+    kml += "<Document>\n";
+    kml += "<name>Exported Data</name>\n";
+    kml += "<description>Data exported from Advanced Coordinate Converter</description>\n";
 
-  kml += '<Style id="defaultMarker">\n';
-  kml += "<IconStyle>\n<Icon>\n<href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href>\n</Icon>\n</IconStyle>\n";
-  kml += "</Style>\n";
-  kml += '<Style id="defaultPoly">\n';
-  kml += "<LineStyle>\n<color>ff0000ff</color>\n<width>2</width>\n</LineStyle>\n";
-  kml += "<PolyStyle>\n<color>400000ff</color>\n</PolyStyle>\n";
-  kml += "</Style>\n";
+    kml += '<Style id="defaultMarker">\n';
+    kml += "<IconStyle>\n<Icon>\n<href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href>\n</Icon>\n</IconStyle>\n";
+    kml += "</Style>\n";
+    kml += '<Style id="defaultPoly">\n';
+    kml += "<LineStyle>\n<color>ff0000ff</color>\n<width>2</width>\n</LineStyle>\n";
+    kml += "<PolyStyle>\n<color>400000ff</color>\n</PolyStyle>\n";
+    kml += "</Style>\n";
 
-  features.forEach((feature, index) => {
-    const type = feature.geometry.type;
-    const coords = feature.geometry.coordinates;
-    const props = feature.properties || {};
+    features.forEach((feature, index) => {
+      const type = feature.geometry.type;
+      const coords = feature.geometry.coordinates;
+      const props = feature.properties || {};
 
-    kml += "<Placemark>\n";
-    kml += `<name>${props.name || props.TYPE || type} ${index + 1}</name>\n`;
-    kml += `<styleUrl>${type === 'Point' ? '#defaultMarker' : '#defaultPoly'}</styleUrl>\n`;
+      kml += "<Placemark>\n";
+      kml += `<name>${props.name || props.TYPE || type} ${index + 1}</name>\n`;
+      kml += `<styleUrl>${type === 'Point' || type === 'MultiPoint' ? '#defaultMarker' : '#defaultPoly'}</styleUrl>\n`;
 
-    let description = "<![CDATA[\n";
-    description += `<h3>${type} Details</h3>\n`;
-    if (type === "Point") {
-      const lat = Array.isArray(coords) ? coords[1] : 0;
-      const lng = Array.isArray(coords) ? coords[0] : 0;
-      description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
-    }
-    if (Object.keys(props).length > 0) {
-      description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
-      for (const [key, value] of Object.entries(props)) {
-        const displayValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
-        description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${displayValue}</td></tr>\n`;
+      let description = "<![CDATA[\n";
+      description += `<h3>${type} Details</h3>\n`;
+      if (type === "Point") {
+        const lat = Array.isArray(coords) ? coords[1] : 0;
+        const lng = Array.isArray(coords) ? coords[0] : 0;
+        description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
       }
-      description += "</table>\n";
-    }
-    description += "]]>\n";
-    kml += `<description>${description}</description>\n`;
+      if (Object.keys(props).length > 0) {
+        description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
+        for (const [key, value] of Object.entries(props)) {
+          const displayValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
+          description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${displayValue}</td></tr>\n`;
+        }
+        description += "</table>\n";
+      }
+      description += "]]>\n";
+      kml += `<description>${description}</description>\n`;
 
-    if (type === "Point") {
-      kml += "<Point>\n";
-      kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
-      kml += "</Point>\n";
-    } else if (type === "LineString") {
-      kml += "<LineString>\n<coordinates>\n";
-      coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-      kml += "\n</coordinates>\n</LineString>\n";
-    } else if (type === "Polygon") {
-      kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
-      coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-      kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
-    } else if (type === "MultiLineString") {
-      kml += "<MultiGeometry>\n";
-      coords.forEach(line => {
-        kml += "<LineString><coordinates>";
-        line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "</coordinates></LineString>\n";
-      });
-      kml += "</MultiGeometry>\n";
-    } else if (type === "MultiPolygon") {
-      kml += "<MultiGeometry>\n";
-      coords.forEach(poly => {
-        kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
-        poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
-      });
-      kml += "</MultiGeometry>\n";
-    }
+      if (type === "Point") {
+        kml += "<Point>\n";
+        kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
+        kml += "</Point>\n";
+      } else if (type === "MultiPoint") {
+        kml += "<MultiGeometry>\n";
+        coords.forEach(c => {
+          kml += `<Point><coordinates>${c[0]},${c[1]},0</coordinates></Point>\n`;
+        });
+        kml += "</MultiGeometry>\n";
+      } else if (type === "LineString") {
+        kml += "<LineString>\n<coordinates>\n";
+        coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "\n</coordinates>\n</LineString>\n";
+      } else if (type === "Polygon") {
+        kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
+        coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
+      } else if (type === "MultiLineString") {
+        kml += "<MultiGeometry>\n";
+        coords.forEach(line => {
+          kml += "<LineString><coordinates>";
+          line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+          kml += "</coordinates></LineString>\n";
+        });
+        kml += "</MultiGeometry>\n";
+      } else if (type === "MultiPolygon") {
+        kml += "<MultiGeometry>\n";
+        coords.forEach(poly => {
+          kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
+          poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+          kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
+        });
+        kml += "</MultiGeometry>\n";
+      }
 
-    kml += "</Placemark>\n";
-  });
+      kml += "</Placemark>\n";
+    });
 
-  kml += "</Document>\n";
-  kml += "</kml>";
-  const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = customFileName || "export_kml.kml";
-  a.click();
-  window.URL.revokeObjectURL(url);
+    kml += "</Document>\n";
+    kml += "</kml>";
+    console.log("[exportToKML] KML content generated, size:", kml.length);
+    
+    const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = customFileName || "export_kml.kml";
+    console.log("[exportToKML] Triggering download:", a.download);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    console.log("[exportToKML] Download complete");
+  } catch (error) {
+    console.error("[exportToKML] Error:", error);
+    alert("Error exporting KML: " + error.message);
+  }
 }
 
 function exportToKMZ(dataSource, customFileName) {
+  console.log("[exportToKMZ] Starting with:", { dataSource, customFileName });
   const features = collectAllMapFeatures(dataSource);
+  console.log("[exportToKMZ] Collected features:", features.length);
 
   if (features.length === 0) {
+    console.error("[exportToKMZ] No features to export");
     alert("No features to export");
     return;
   }
 
-  let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
-  kml += "<Document>\n";
-  kml += "<name>Exported Data</name>\n";
-  kml += "<description>Data exported from Advanced Coordinate Converter</description>\n";
+  try {
+    let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
+    kml += "<Document>\n";
+    kml += "<name>Exported Data</name>\n";
+    kml += "<description>Data exported from Advanced Coordinate Converter</description>\n";
 
-  kml += '<Style id="defaultMarker">\n';
-  kml += "<IconStyle>\n<Icon>\n<href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href>\n</Icon>\n</IconStyle>\n";
-  kml += "</Style>\n";
-  kml += '<Style id="defaultPoly">\n';
-  kml += "<LineStyle>\n<color>ff0000ff</color>\n<width>2</width>\n</LineStyle>\n";
-  kml += "<PolyStyle>\n<color>400000ff</color>\n</PolyStyle>\n";
-  kml += "</Style>\n";
+    kml += '<Style id="defaultMarker">\n';
+    kml += "<IconStyle>\n<Icon>\n<href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href>\n</Icon>\n</IconStyle>\n";
+    kml += "</Style>\n";
+    kml += '<Style id="defaultPoly">\n';
+    kml += "<LineStyle>\n<color>ff0000ff</color>\n<width>2</width>\n</LineStyle>\n";
+    kml += "<PolyStyle>\n<color>400000ff</color>\n</PolyStyle>\n";
+    kml += "</Style>\n";
 
-  features.forEach((feature, index) => {
-    const type = feature.geometry.type;
-    const coords = feature.geometry.coordinates;
-    const props = feature.properties || {};
+    features.forEach((feature, index) => {
+      const type = feature.geometry.type;
+      const coords = feature.geometry.coordinates;
+      const props = feature.properties || {};
 
-    kml += "<Placemark>\n";
-    kml += `<name>${props.name || props.TYPE || type} ${index + 1}</name>\n`;
-    kml += `<styleUrl>${type === 'Point' ? '#defaultMarker' : '#defaultPoly'}</styleUrl>\n`;
+      kml += "<Placemark>\n";
+      kml += `<name>${props.name || props.TYPE || type} ${index + 1}</name>\n`;
+      kml += `<styleUrl>${type === 'Point' || type === 'MultiPoint' ? '#defaultMarker' : '#defaultPoly'}</styleUrl>\n`;
 
-    let description = "<![CDATA[\n";
-    description += `<h3>${type} Details</h3>\n`;
-    if (type === "Point") {
-      const lat = Array.isArray(coords) ? coords[1] : 0;
-      const lng = Array.isArray(coords) ? coords[0] : 0;
-      description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
-    }
-    if (Object.keys(props).length > 0) {
-      description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
-      for (const [key, value] of Object.entries(props)) {
-        const displayValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
-        description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${displayValue}</td></tr>\n`;
+      let description = "<![CDATA[\n";
+      description += `<h3>${type} Details</h3>\n`;
+      if (type === "Point") {
+        const lat = Array.isArray(coords) ? coords[1] : 0;
+        const lng = Array.isArray(coords) ? coords[0] : 0;
+        description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
       }
-      description += "</table>\n";
+      if (Object.keys(props).length > 0) {
+        description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
+        for (const [key, value] of Object.entries(props)) {
+          const displayValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
+          description += `<tr><td style="padding: 5px;"><strong>${key}</strong></td><td style="padding: 5px;">${displayValue}</td></tr>\n`;
+        }
+        description += "</table>\n";
+      }
+      description += "]]>\n";
+      kml += `<description>${description}</description>\n`;
+
+      if (type === "Point") {
+        kml += "<Point>\n";
+        kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
+        kml += "</Point>\n";
+      } else if (type === "MultiPoint") {
+        kml += "<MultiGeometry>\n";
+        coords.forEach(c => {
+          kml += `<Point><coordinates>${c[0]},${c[1]},0</coordinates></Point>\n`;
+        });
+        kml += "</MultiGeometry>\n";
+      } else if (type === "LineString") {
+        kml += "<LineString>\n<coordinates>\n";
+        coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "\n</coordinates>\n</LineString>\n";
+      } else if (type === "Polygon") {
+        kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
+        coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+        kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
+      } else if (type === "MultiLineString") {
+        kml += "<MultiGeometry>\n";
+        coords.forEach(line => {
+          kml += "<LineString><coordinates>";
+          line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+          kml += "</coordinates></LineString>\n";
+        });
+        kml += "</MultiGeometry>\n";
+      } else if (type === "MultiPolygon") {
+        kml += "<MultiGeometry>\n";
+        coords.forEach(poly => {
+          kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
+          poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+          kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
+        });
+        kml += "</MultiGeometry>\n";
+      }
+
+      kml += "</Placemark>\n";
+    });
+
+    kml += "</Document>\n";
+    kml += "</kml>";
+    console.log("[exportToKMZ] KML content generated, size:", kml.length);
+
+    if (typeof JSZip === 'undefined') {
+      console.error("[exportToKMZ] JSZip not available");
+      alert("JSZip library not found for KMZ export");
+      return;
     }
-    description += "]]>\n";
-    kml += `<description>${description}</description>\n`;
 
-    if (type === "Point") {
-      kml += "<Point>\n";
-      kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
-      kml += "</Point>\n";
-    } else if (type === "LineString") {
-      kml += "<LineString>\n<coordinates>\n";
-      coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-      kml += "\n</coordinates>\n</LineString>\n";
-    } else if (type === "Polygon") {
-      kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
-      coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-      kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
-    } else if (type === "MultiLineString") {
-      kml += "<MultiGeometry>\n";
-      coords.forEach(line => {
-        kml += "<LineString><coordinates>";
-        line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "</coordinates></LineString>\n";
-      });
-      kml += "</MultiGeometry>\n";
-    } else if (type === "MultiPolygon") {
-      kml += "<MultiGeometry>\n";
-      coords.forEach(poly => {
-        kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
-        poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
-      });
-      kml += "</MultiGeometry>\n";
-    }
-
-    kml += "</Placemark>\n";
-  });
-
-  kml += "</Document>\n";
-  kml += "</kml>";
-
-  if (typeof JSZip === 'undefined') {
-    alert("JSZip library not found for KMZ export");
-    return;
+    showProcessingOverlay("Generating KMZ...");
+    const zip = new JSZip();
+    zip.file("doc.kml", kml);
+    console.log("[exportToKMZ] Starting async zip generation");
+    
+    zip.generateAsync({ type: "blob" }).then(function (content) {
+      console.log("[exportToKMZ] Zip blob generated, size:", content.size);
+      const url = window.URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = customFileName || "export_kmz.kmz";
+      console.log("[exportToKMZ] Triggering download:", a.download);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      hideProcessingOverlay();
+      console.log("[exportToKMZ] Download complete");
+    }).catch(err => {
+      console.error("[exportToKMZ] Error:", err);
+      hideProcessingOverlay();
+      alert("Error generating KMZ: " + err.message);
+    });
+  } catch (error) {
+    console.error("[exportToKMZ] Error:", error);
+    alert("Error exporting KMZ: " + error.message);
   }
-
-  showProcessingOverlay("Generating KMZ...");
-  const zip = new JSZip();
-  zip.file("doc.kml", kml);
-  zip.generateAsync({ type: "blob" }).then(function (content) {
-    const url = window.URL.createObjectURL(content);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = customFileName || "export_kmz.kmz";
-    a.click();
-    window.URL.revokeObjectURL(url);
-    hideProcessingOverlay();
-  }).catch(err => {
-    console.error("KMZ Export Error:", err);
-    hideProcessingOverlay();
-    alert("Error generating KMZ");
-  });
 }
 
 // ==== ADVANCED GIS CAPABILITIES ====
