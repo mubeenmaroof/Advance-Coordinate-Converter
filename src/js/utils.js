@@ -336,3 +336,9 @@ window.validateFileSize = validateFileSize;
 window.getExportOptionsHTML = getExportOptionsHTML;
 window.getRepresentativePoint = getRepresentativePoint;
 window.handleGenericExport = handleGenericExport;
+
+function refreshPage() {
+    location.reload();
+}
+window.refreshPage = refreshPage;
+
