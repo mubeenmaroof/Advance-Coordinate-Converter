@@ -5,6 +5,26 @@
   box-sizing: border-box;
 }
 
+/* Protections applied only when NOT in local development */
+.security-locked, 
+.security-locked * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Allow selection in input fields and textareas for usability */
+.security-locked input, 
+.security-locked textarea, 
+.security-locked [contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
 :root {
   --primary: #667eea;
   --secondary: #764ba2;
