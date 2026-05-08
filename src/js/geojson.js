@@ -446,9 +446,9 @@ function showGeoJsonOnMap() {
             const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' });
           }
-          // Add individual features to drawnItems so they can be exported
-          if (drawnItems && !(layer instanceof L.Marker)) {
-            drawnItems.addLayer(layer);
+          // Add non-point features to importedLayers for selection and export
+          if (importedLayers && !(layer instanceof L.Marker)) {
+            importedLayers.addLayer(layer);
           }
         },
         pointToLayer: function (feature, latlng) {

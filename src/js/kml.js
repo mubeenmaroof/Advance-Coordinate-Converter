@@ -520,9 +520,9 @@ function showKmlOnMap() {
             const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' });
           }
-          // Add non-point features to drawnItems for export
-          if (drawnItems && !(layer instanceof L.Marker)) {
-            drawnItems.addLayer(layer);
+          // Add non-point features to importedLayers for selection and export
+          if (importedLayers && !(layer instanceof L.Marker)) {
+            importedLayers.addLayer(layer);
           }
         },
         pointToLayer: function (feature, latlng) {

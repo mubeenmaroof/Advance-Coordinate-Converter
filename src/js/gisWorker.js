@@ -4,7 +4,7 @@
  */
 
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
-importScripts('https://unpkg.com/shpjs@6.2.0/dist/shp.js');
+importScripts('https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.2/shp.min.js');
 
 self.onmessage = async function (e) {
   const { type, buffers } = e.data;
@@ -97,10 +97,10 @@ function validateShpBuffer(data) {
   const version = view.getInt32(28, true);
   const shapeType = view.getInt32(32, true);
   const bbox = [
-    view.readDoubleLE(36), // xmin
-    view.readDoubleLE(44), // ymin
-    view.readDoubleLE(52), // xmax
-    view.readDoubleLE(60)  // ymax
+    view.getFloat64(36, true), // xmin
+    view.getFloat64(44, true), // ymin
+    view.getFloat64(52, true), // xmax
+    view.getFloat64(60, true)  // ymax
   ];
 
   console.log('[SHP Diagnostics]', {

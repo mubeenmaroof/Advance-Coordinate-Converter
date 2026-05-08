@@ -146,8 +146,9 @@ async function handleShpFiles(files) {
         startShpProgressPulse(20, 88);
         startShpWorkerTimeout(45000);
 
-        // Create GIS Worker for this shapefile
-        const gisWorker = new Worker('src/js/gisWorker.js');
+        // Create GIS Worker for this shapefile (with cache buster)
+        const workerUrl = 'src/js/gisWorker.js?v=20260508_04';
+        const gisWorker = new Worker(workerUrl);
 
         // Process this shapefile
         const geojson = await new Promise((resolve, reject) => {

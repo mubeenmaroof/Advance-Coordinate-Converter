@@ -1,4 +1,4 @@
-﻿// map-related logic and helpers
+// map-related logic and helpers
 
 function initMap() {
   // Check if mapContainer exists
@@ -902,9 +902,8 @@ function filterPointsByDrawing(layer) {
             // Check if line intersects with selection (works for both circles and polygons)
             if (selectionGeoJSON) {
               try {
-                const lineIntersectResult = turf.lineIntersect(feature, selectionGeoJSON);
-                const intersects = lineIntersectResult && lineIntersectResult.features && lineIntersectResult.features.length > 0;
-                console.log(`Line/MultiLineString: lineIntersect result =`, lineIntersectResult, "intersects=", intersects);
+                const intersects = turf.booleanIntersects(feature, selectionGeoJSON);
+                console.log(`Line/MultiLineString: booleanIntersects result =`, intersects);
                 if (intersects) {
                   console.log(`✓ Line selected`);
                   selectedFeatures.lines.push({ layer: geoLayer, feature: feature });
@@ -916,17 +915,17 @@ function filterPointsByDrawing(layer) {
               console.log("LineString: selectionGeoJSON is null, skipping");
             }
           } else if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
-            // Check if polygon overlaps with selection
+            // Check if polygon intersects or is within selection
             if (selectionGeoJSON) {
               try {
-                const overlaps = turf.booleanOverlap(feature, selectionGeoJSON);
-                console.log(`Polygon/MultiPolygon: booleanOverlap result =`, overlaps);
-                if (overlaps) {
+                const intersects = turf.booleanIntersects(feature, selectionGeoJSON);
+                console.log(`Polygon/MultiPolygon: booleanIntersects result =`, intersects);
+                if (intersects) {
                   console.log(`✓ Polygon selected`);
                   selectedFeatures.polygons.push({ layer: geoLayer, feature: feature });
                 }
               } catch (err) {
-                console.error("Polygon overlap check failed:", err.message);
+                console.error("Polygon intersection check failed:", err.message);
               }
             } else {
               console.log("Polygon: selectionGeoJSON is null, skipping");
@@ -1499,24 +1498,23 @@ function collectAllMapFeatures(dataSource) {
   let features = [];
 
   if (dataSource && dataSource.type === "FeatureCollection") {
-    return dataSource.features.slice(); // direct export
-  }
+    features = dataSource.features.slice(); // direct export
+  } else {
+    const sourceMarkers = dataSource
+      ? (Array.isArray(dataSource) ? dataSource : [])
+      : (selectedMarkers.length > 0 ? selectedMarkers : markers);
 
-  const sourceMarkers = dataSource
-    ? (Array.isArray(dataSource) ? dataSource : [])
-    : (selectedMarkers.length > 0 ? selectedMarkers : markers);
-
-  // 1. Markers
-  sourceMarkers.forEach(m => {
-    if (typeof m.getLatLng !== 'function') return;
-    let props = {};
-    if (m.markerData && m.markerData.rowData) props = { ...m.markerData.rowData };
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [m.getLatLng().lng, m.getLatLng().lat] },
-      properties: props
+    // 1. Markers
+    sourceMarkers.forEach(m => {
+      if (typeof m.getLatLng !== 'function') return;
+      let props = {};
+      if (m.markerData && m.markerData.rowData) props = { ...m.markerData.rowData };
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [m.getLatLng().lng, m.getLatLng().lat] },
+        properties: props
+      });
     });
-  });
 
   // 2. Drawn items
   if (drawnItems) {
@@ -1549,27 +1547,44 @@ function collectAllMapFeatures(dataSource) {
     });
   }
 
-  // 4. Fallback: raw in-memory data stores (if nothing collected yet from live map)
-  if (features.length === 0) {
-    const stores = [
-      typeof currentKmlData !== 'undefined' ? currentKmlData : null,
-      typeof currentGeoJsonData !== 'undefined' ? currentGeoJsonData : null,
-      typeof currentShpData !== 'undefined' ? currentShpData : null,
-    ];
-    stores.forEach(store => {
-      if (!store) return;
-      const collection = Array.isArray(store) ? store : [store];
-      collection.forEach(fc => {
-        if (fc && fc.type === "FeatureCollection" && fc.features) {
-          features = features.concat(fc.features);
-        } else if (fc && fc.type === "Feature") {
-          features.push(fc);
-        }
+    // 4. Fallback: raw in-memory data stores (if nothing collected yet from live map)
+    if (features.length === 0) {
+      const stores = [
+        typeof currentKmlData !== 'undefined' ? currentKmlData : null,
+        typeof currentGeoJsonData !== 'undefined' ? currentGeoJsonData : null,
+        typeof currentShpData !== 'undefined' ? currentShpData : null,
+      ];
+      stores.forEach(store => {
+        if (!store) return;
+        const collection = Array.isArray(store) ? store : [store];
+        collection.forEach(fc => {
+          if (fc && fc.type === "FeatureCollection" && fc.features) {
+            features = features.concat(fc.features);
+          } else if (fc && fc.type === "Feature") {
+            features.push(fc);
+          }
+        });
       });
-    });
+    }
   }
 
-  return features;
+  // Flatten GeometryCollections which cause issues in exports (like shpwrite or custom KML export)
+  const finalFeatures = [];
+  features.forEach(f => {
+    if (f && f.geometry && f.geometry.type === 'GeometryCollection' && Array.isArray(f.geometry.geometries)) {
+      f.geometry.geometries.forEach(geom => {
+        finalFeatures.push({
+          type: "Feature",
+          geometry: geom,
+          properties: { ...f.properties }
+        });
+      });
+    } else if (f) {
+      finalFeatures.push(f);
+    }
+  });
+
+  return finalFeatures;
 }
 
 function exportToShp(dataSource, customFileName) {
@@ -1585,8 +1600,44 @@ function exportToShp(dataSource, customFileName) {
     return;
   }
 
+  // Flatten MultiGeometries (shpwrite has bugs with MultiLineString and sometimes MultiPolygon)
+  const flattenedFeatures = [];
+  rawFeatures.forEach(f => {
+    if (!f || !f.geometry || !f.geometry.coordinates) return;
+    const type = f.geometry.type;
+    const coords = f.geometry.coordinates;
+
+    if (type === 'MultiLineString') {
+      coords.forEach(lineCoords => {
+        flattenedFeatures.push({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: lineCoords },
+          properties: { ...f.properties }
+        });
+      });
+    } else if (type === 'MultiPolygon') {
+      coords.forEach(polyCoords => {
+        flattenedFeatures.push({
+          type: "Feature",
+          geometry: { type: "Polygon", coordinates: polyCoords },
+          properties: { ...f.properties }
+        });
+      });
+    } else if (type === 'MultiPoint') {
+      coords.forEach(ptCoords => {
+        flattenedFeatures.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: ptCoords },
+          properties: { ...f.properties }
+        });
+      });
+    } else {
+      flattenedFeatures.push(f);
+    }
+  });
+
   // Flatten properties for DBF compatibility (max 10 char keys, no objects)
-  const features = rawFeatures.map(f => {
+  const features = flattenedFeatures.map(f => {
     const feat = JSON.parse(JSON.stringify(f));
     const flatProps = {};
     if (feat.properties) {
@@ -1597,13 +1648,57 @@ function exportToShp(dataSource, customFileName) {
       });
     }
     feat.properties = flatProps;
+
+    // shp-write does not support 3D coordinates (Z value from KML/GPX), so we strictly enforce 2D [lng, lat]
+    if (feat.geometry && feat.geometry.coordinates) {
+      const removeZ = (coords) => {
+        if (Array.isArray(coords) && coords.length > 0) {
+          if (typeof coords[0] === 'number') {
+            return coords.slice(0, 2);
+          } else {
+            return coords.map(removeZ);
+          }
+        }
+        return coords;
+      };
+      feat.geometry.coordinates = removeZ(feat.geometry.coordinates);
+    }
+
+    // Convert LineString to MultiLineString because shp-write has a fundamental bug where it expects LineStrings to have the same array nesting depth as Polygons.
+    // If passed a standard LineString, shp-write incorrectly treats each individual vertex as a separate part, corrupting the shapefile.
+    if (feat.geometry && feat.geometry.type === 'LineString') {
+      feat.geometry.type = 'MultiLineString';
+      feat.geometry.coordinates = [feat.geometry.coordinates];
+    }
+
     return feat;
   });
 
 
+  const validFeatures = features.filter(f => {
+    if (!f.geometry || !f.geometry.coordinates) return false;
+    const type = f.geometry.type;
+    const coords = f.geometry.coordinates;
+
+    try {
+      if (type === 'Point') {
+        return coords.length >= 2;
+      } else if (type === 'LineString') {
+        return coords.length >= 2 && Array.isArray(coords[0]) && coords[0].length >= 2;
+      } else if (type === 'Polygon') {
+        return coords.length >= 1 && Array.isArray(coords[0]) && coords[0].length >= 3;
+      } else if (type === 'MultiPoint' || type === 'MultiLineString' || type === 'MultiPolygon') {
+        return coords.length > 0;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  });
+
   const geojson = {
     type: 'FeatureCollection',
-    features: features
+    features: validFeatures
   };
 
   try {
