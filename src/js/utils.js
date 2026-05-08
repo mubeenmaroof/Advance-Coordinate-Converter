@@ -176,6 +176,22 @@ function getExportOptionsHTML(excludeFormat, selectId) {
   return html;
 }
 
+function getRepresentativePoint(geometry) {
+  if (!geometry || !geometry.coordinates) return null;
+  if (geometry.type === "Point") return geometry.coordinates;
+
+  try {
+    let coords = geometry.coordinates;
+    // Drill down to the first coordinate pair [lng, lat]
+    while (Array.isArray(coords) && Array.isArray(coords[0])) {
+      coords = coords[0];
+    }
+    return (Array.isArray(coords) && coords.length >= 2) ? coords : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 function handleGenericExport(format, dataStore, inputId, customFileName) {
   if (!dataStore || dataStore.length === 0) {
     alert("No data available to export.");
@@ -318,4 +334,5 @@ window.normalizeCoordinates = normalizeCoordinates;
 window.parseCSV = parseCSV;
 window.validateFileSize = validateFileSize;
 window.getExportOptionsHTML = getExportOptionsHTML;
+window.getRepresentativePoint = getRepresentativePoint;
 window.handleGenericExport = handleGenericExport;

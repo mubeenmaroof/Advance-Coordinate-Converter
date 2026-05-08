@@ -74,26 +74,55 @@ async function handleKmzFile(file) {
  * Extracts key-value pairs from an HTML table (common in KML descriptions)
  */
 function extractPropertiesFromHtml(html) {
-  if (!html || typeof html !== 'string' || !html.includes('<table')) return {};
+  if (!html || typeof html !== 'string') return {};
   const props = {};
+  
+  // Basic check for table-like structure
+  if (!html.includes('<table') && !html.includes('<tr')) {
+    // If no table, try simple key: value patterns in lines
+    const lines = html.split(/<br\s*\/?>|\n/i);
+    lines.forEach(line => {
+      const text = line.replace(/<[^>]*>/g, '').trim();
+      const match = text.match(/^([^:]+):\s*(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const val = match[2].trim();
+        if (key && val) props[key] = val;
+      }
+    });
+    return props;
+  }
+
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    // Look for standard GIS attribute tables (usually 2 columns: Name/Key and Value)
     const rows = doc.querySelectorAll('tr');
+    
     rows.forEach(row => {
       const cells = row.querySelectorAll('td, th');
       if (cells.length >= 2) {
-        // Use the first cell as key, second as value
+        // Option A: Key in cells[0], Value in cells[1]
         let key = cells[0].textContent.trim().replace(/:$/, '');
-        const val = cells[1].textContent.trim();
+        let val = cells[1].textContent.trim();
         
-        // Clean up key for GIS compatibility
-        if (key && val !== undefined && val !== null) {
-          // If key is empty or just whitespace, skip
-          if (key.length > 0) {
-            props[key] = val;
-          }
+        // Option B: If cells[0] is empty but cells[1] has a colon (rare but happens)
+        if (!key && val.includes(':')) {
+           const parts = val.split(':');
+           key = parts[0].trim();
+           val = parts.slice(1).join(':').trim();
+        }
+
+        if (key && val !== undefined && val !== null && key.length > 0) {
+          props[key] = val;
+        }
+      } else if (cells.length === 1) {
+        // Some KMLs have Key and Value in the same cell separated by :
+        const text = cells[0].textContent.trim();
+        const match = text.match(/^([^:]+):\s*(.*)$/);
+        if (match) {
+          const key = match[1].trim();
+          const val = match[2].trim();
+          if (key && val) props[key] = val;
         }
       }
     });
@@ -118,17 +147,25 @@ function processKmlData(kmlString, fileName) {
 
     const geoJsonData = toGeoJSON.kml(kmlDom);
     
-    // ENHANCEMENT: Extract attributes from HTML description tables if present
+    // ENHANCEMENT: Extract attributes from HTML description tables and flatten ExtendedData
     if (geoJsonData.features) {
       geoJsonData.features.forEach(feature => {
+        // 1. Flatten ExtendedData if present (toGeoJSON sometimes nests it)
+        if (feature.properties && feature.properties.ExtendedData) {
+          const extData = feature.properties.ExtendedData;
+          for (const [key, val] of Object.entries(extData)) {
+            // Flatten SimpleData if it's nested as { value: x }
+            const cleanVal = (val && typeof val === 'object' && val.value !== undefined) ? val.value : val;
+            feature.properties[key] = cleanVal;
+          }
+          delete feature.properties.ExtendedData;
+        }
+
+        // 2. Parse HTML Description (overwriting existing fields as requested)
         if (feature.properties && feature.properties.description) {
           const htmlProps = extractPropertiesFromHtml(feature.properties.description);
-          // Merge extracted properties into feature.properties
-          // We don't overwrite existing properties to be safe
           for (const [key, val] of Object.entries(htmlProps)) {
-            if (feature.properties[key] === undefined) {
-              feature.properties[key] = val;
-            }
+            feature.properties[key] = val;
           }
         }
       });
@@ -552,7 +589,7 @@ function showKmlOnMap() {
             fillOpacity: 0.2
           };
         }
-      }).addTo(map);
+      });
 
       // Fit bounds
       try {

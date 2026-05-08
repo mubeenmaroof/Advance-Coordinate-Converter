@@ -297,21 +297,6 @@ function processShpData(geojson) {
   renderShpPreview();
 }
 
-function getRepresentativePoint(geometry) {
-  if (!geometry || !geometry.coordinates) return null;
-  if (geometry.type === "Point") return geometry.coordinates;
-
-  try {
-    let coords = geometry.coordinates;
-    // Drill down to the first coordinate pair [lng, lat]
-    while (Array.isArray(coords) && Array.isArray(coords[0])) {
-      coords = coords[0];
-    }
-    return (Array.isArray(coords) && coords.length >= 2) ? coords : null;
-  } catch (e) {
-    return null;
-  }
-}
 
 function extractCoordinatesFromShp(geometry) {
   const coords = [];
@@ -690,6 +675,11 @@ function showShpOnMap() {
             const popupContent = createPremiumPopupHTML(null, null, props, null);
             layer.bindPopup(popupContent, { maxWidth: 350, className: 'premium-popup' }).openPopup();
           });
+
+          // Add non-point features to importedLayers for selection and export
+          if (typeof importedLayers !== 'undefined' && importedLayers && !(layer instanceof L.Marker)) {
+            importedLayers.addLayer(layer);
+          }
         },
         style: function (feature) {
           return {
@@ -705,7 +695,10 @@ function showShpOnMap() {
 
           // Use standard detailed marker for consistency with Excel/CSV
           if (typeof addDetailedMarker === "function") {
-            addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber);
+            const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber);
+            if (marker && typeof importedLayers !== 'undefined') {
+              importedLayers.addLayer(marker);
+            }
             // We return a dummy layer so L.geoJSON doesn't try to add another point
             return L.layerGroup();
           }
@@ -720,7 +713,7 @@ function showShpOnMap() {
             fillOpacity: 1
           });
         }
-      }).addTo(mainLayerGroup);
+      });
 
       currentIndex = nextEnd;
 

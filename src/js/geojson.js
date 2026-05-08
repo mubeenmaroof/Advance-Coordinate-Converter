@@ -478,7 +478,7 @@ function showGeoJsonOnMap() {
             fillOpacity: 0.2
           };
         }
-      }).addTo(importedLayers);
+      });
       
       // Fit bounds
       try {

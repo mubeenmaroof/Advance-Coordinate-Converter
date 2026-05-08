@@ -776,12 +776,12 @@ function filterPointsByDrawing(layer) {
       const center = layer.getLatLng();
       const radius = layer.getRadius(); // in meters
       console.log("Circle detected - radius:", radius, "meters");
-      
+
       // Create a circular polygon for spatial queries (lines, polygons)
       const centerPoint = turf.point([center.lng, center.lat]);
       selectionGeoJSON = turf.circle(centerPoint, radius / 1000, { units: 'kilometers' }); // Convert radius to km
       console.log("Circle GeoJSON created:", selectionGeoJSON);
-      
+
       isInsideFunction = (marker) => {
         const markerPoint = turf.point([
           marker.getLatLng().lng,
@@ -861,16 +861,16 @@ function filterPointsByDrawing(layer) {
     });
 
     // Also select features from imported layers (polylines, polygons)
-    const selectedFeatures = { points: [], lines: [], polygons: [] };
-    
+    selectedFeatures = { points: [], lines: [], polygons: [] };
+
     console.log("🔍 Starting feature detection from imported layers...");
     console.log("importedLayers exists:", !!importedLayers);
     console.log("selectionGeoJSON exists:", !!selectionGeoJSON);
-    
+
     if (importedLayers) {
       let layerCount = 0;
       let geometryCounts = { Point: 0, LineString: 0, MultiLineString: 0, Polygon: 0, MultiPolygon: 0 };
-      
+
       importedLayers.eachLayer((geoLayer) => {
         layerCount++;
         try {
@@ -883,11 +883,17 @@ function filterPointsByDrawing(layer) {
 
           const geomType = feature.geometry.type;
           geometryCounts[geomType] = (geometryCounts[geomType] || 0) + 1;
-          
+
           console.log(`Layer ${layerCount}: Type=${geomType}, has properties:`, !!feature.properties);
           let isSelected = false;
 
           if (geomType === 'Point') {
+            // Avoid duplicates if this layer is already selected in the primary markers loop
+            if (selectedMarkers.includes(geoLayer)) {
+              console.log(`Layer ${layerCount}: Point already in selectedMarkers, skipping duplicate`);
+              return;
+            }
+
             const point = turf.point(feature.geometry.coordinates);
             if (selectionGeoJSON) {
               isSelected = turf.booleanPointInPolygon(point, selectionGeoJSON);
@@ -945,6 +951,9 @@ function filterPointsByDrawing(layer) {
     console.log("✅ Selected markers count:", count);
     console.log("Selected features by type:", selectedFeatures);
     console.log("Selected markers:", selectedMarkers);
+
+    // Update the global reference to the last selection layer
+    lastSelectionLayer = layer;
 
     // Show the enhanced selected data panel with separate tables
     displaySelectedMarkersPanel(selectedMarkers, layer, selectedFeatures);
@@ -1160,14 +1169,37 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer, selectedFeatur
         <div id="selectionPanelBody" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; max-height: 60vh;">
     `;
 
-  // Build table for points (markers + point features)
-  let pointsTableHTML = buildAttributeTable(selectedMarkersArray.concat(selectedFeatures.points.map(p => ({ 
+  // Combine markers and point features, then deduplicate
+  const rawPoints = selectedMarkersArray.concat(selectedFeatures.points.map(p => ({
     getLatLng: () => {
       const coords = p.feature.geometry.coordinates;
       return { lat: coords[1], lng: coords[0] };
     },
-    markerData: { rowData: p.feature.properties || {} }
-  }))), 'Points', totalCount);
+    markerData: { rowData: p.feature.properties || {} },
+    isPointFeature: true
+  })));
+
+  // Deduplicate points based on coordinates and properties string
+  const uniquePoints = [];
+  const seenPointKeys = new Set();
+
+  rawPoints.forEach(p => {
+    try {
+      const latlng = p.getLatLng();
+      const props = p.markerData?.rowData || {};
+      const key = `${latlng.lat.toFixed(6)}|${latlng.lng.toFixed(6)}|${JSON.stringify(props)}`;
+
+      if (!seenPointKeys.has(key)) {
+        uniquePoints.push(p);
+        seenPointKeys.add(key);
+      }
+    } catch (e) {
+      uniquePoints.push(p); // Fallback if key generation fails
+    }
+  });
+
+  // Build table for points
+  let pointsTableHTML = buildAttributeTable(uniquePoints, 'Points', totalCount);
 
   // Build table for lines
   let linesTableHTML = buildAttributeTable(selectedFeatures.lines, 'Lines', totalCount, 'line');
@@ -1225,7 +1257,7 @@ function buildAttributeTable(data, type, totalCount, featureType = 'point') {
     tableHTML += '<thead style="position: sticky; top: 0; background: #764ba2; color: white; border-bottom: 2px solid #512da8; z-index: 1;">';
     tableHTML += "<tr>";
     tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white; position: sticky; left: 0; z-index: 2;">#</th>';
-    
+
     if (featureType === 'point') {
       tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">Latitude</th>';
       tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">Longitude</th>';
@@ -1289,7 +1321,7 @@ function switchSelectionTab(tabName) {
   document.querySelectorAll('.selection-tab').forEach(tab => {
     tab.style.display = 'none';
   });
-  
+
   // Show selected tab
   const selectedTab = document.getElementById(`tab-${tabName}`);
   if (selectedTab) {
@@ -1345,6 +1377,7 @@ function resetMarkerSelection() {
     }
   });
   selectedMarkers = [];
+  selectedFeatures = { points: [], lines: [], polygons: [] };
   lastSelectionLayer = null;
 }
 
@@ -1357,7 +1390,7 @@ function copySelectedCoordinates() {
   let coordinateText = "Latitude,Longitude\n";
   selectedMarkers.forEach((marker) => {
     const latlng = marker.getLatLng();
-    coordinateText += `${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}\n`;
+    coordinateText += `${latlng.lat.toFixed(currentPrecision)},${latlng.lng.toFixed(currentPrecision)}\n`;
   });
 
   navigator.clipboard
@@ -1401,9 +1434,9 @@ function exportSelectedAsCSV() {
 
     keysArray.forEach((key) => {
       if (key === "Latitude") {
-        row.push(latlng.lat.toFixed(6));
+        row.push(latlng.lat.toFixed(currentPrecision));
       } else if (key === "Longitude") {
-        row.push(latlng.lng.toFixed(6));
+        row.push(latlng.lng.toFixed(currentPrecision));
       } else {
         let val = "";
         if (marker.markerData && marker.markerData.rowData && marker.markerData.rowData[key] !== undefined && marker.markerData.rowData[key] !== null) {
@@ -1516,36 +1549,55 @@ function collectAllMapFeatures(dataSource) {
       });
     });
 
-  // 2. Drawn items
-  if (drawnItems) {
-    drawnItems.eachLayer(layer => {
-      if (sourceMarkers.includes(layer)) return;
-      if (typeof layer.toGeoJSON === 'function') {
-        const gj = layer.toGeoJSON();
-        if (gj.type === "FeatureCollection" && gj.features) {
-          features = features.concat(gj.features);
-        } else {
-          features.push(gj);
-        }
-      }
-    });
-  }
+    // 2. Drawn items (If no selection, export all. If selection, only if they are the selection layer)
+    if (drawnItems) {
+      drawnItems.eachLayer(layer => {
+        // Avoid duplicating markers already processed
+        if (sourceMarkers.some(sm => sm === layer)) return;
 
-  // 3. Imported layers
-  if (importedLayers) {
-    importedLayers.eachLayer(layer => {
-      if (sourceMarkers.includes(layer)) return;
-      if (drawnItems && drawnItems.hasLayer(layer)) return;
-      if (typeof layer.toGeoJSON === 'function') {
-        const gj = layer.toGeoJSON();
-        if (gj.type === "FeatureCollection" && gj.features) {
-          features = features.concat(gj.features);
-        } else {
-          features.push(gj);
+        // If we have a selection, only export the selection boundary itself if desired, 
+        // but usually we don't want to export the selection rectangle as a data polygon.
+        // For now, we skip the selection layer to keep data clean.
+        if (layer === lastSelectionLayer) return;
+
+        if (typeof layer.toGeoJSON === 'function') {
+          const gj = layer.toGeoJSON();
+          if (gj.type === "FeatureCollection" && gj.features) {
+            features = features.concat(gj.features);
+          } else {
+            features.push(gj);
+          }
         }
-      }
-    });
-  }
+      });
+    }
+
+    // 3. Imported layers (If selection active, only use selectedFeatures. Else use all importedLayers)
+    const isSelectionActive = selectedMarkers.length > 0 || (selectedFeatures && (selectedFeatures.lines.length > 0 || selectedFeatures.polygons.length > 0));
+
+    if (isSelectionActive && selectedFeatures) {
+      // Selection mode: ONLY export selected vector features
+      selectedFeatures.lines.forEach(item => {
+        if (item.feature) features.push(item.feature);
+      });
+      selectedFeatures.polygons.forEach(item => {
+        if (item.feature) features.push(item.feature);
+      });
+      // Points from selectedFeatures are already covered by sourceMarkers/selectedMarkers
+    } else if (importedLayers) {
+      // Normal mode: export all imported layers
+      importedLayers.eachLayer(layer => {
+        if (sourceMarkers.some(sm => sm === layer)) return;
+        if (drawnItems && drawnItems.hasLayer(layer)) return;
+        if (typeof layer.toGeoJSON === 'function') {
+          const gj = layer.toGeoJSON();
+          if (gj.type === "FeatureCollection" && gj.features) {
+            features = features.concat(gj.features);
+          } else {
+            features.push(gj);
+          }
+        }
+      });
+    }
 
     // 4. Fallback: raw in-memory data stores (if nothing collected yet from live map)
     if (features.length === 0) {
@@ -2699,7 +2751,7 @@ function exportToKML(dataSource, customFileName) {
     kml += "</Document>\n";
     kml += "</kml>";
     console.log("[exportToKML] KML content generated, size:", kml.length);
-    
+
     const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2821,7 +2873,7 @@ function exportToKMZ(dataSource, customFileName) {
     const zip = new JSZip();
     zip.file("doc.kml", kml);
     console.log("[exportToKMZ] Starting async zip generation");
-    
+
     zip.generateAsync({ type: "blob" }).then(function (content) {
       console.log("[exportToKMZ] Zip blob generated, size:", content.size);
       const url = window.URL.createObjectURL(content);
@@ -3748,49 +3800,103 @@ document.head.appendChild(style);
 
 // Export Map Data to Excel and CSV
 function exportToExcel() {
-  let exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : [...markers];
-  
-  // Include points from imported layers
-  if (importedLayers) {
-    importedLayers.eachLayer(layer => {
-      if ((layer instanceof L.Marker || layer instanceof L.CircleMarker) && !exportMarkers.includes(layer)) {
-        exportMarkers.push(layer);
-      }
-    });
+  const isSelectionActive = selectedMarkers.length > 0 || (selectedFeatures && (selectedFeatures.lines.length > 0 || selectedFeatures.polygons.length > 0));
+
+  let exportItems = [];
+  if (isSelectionActive) {
+    exportItems = [...selectedMarkers];
+    if (selectedFeatures) {
+      selectedFeatures.lines.forEach(item => {
+        exportItems.push({
+          feature: item.feature,
+          markerData: { rowData: item.feature.properties || {} },
+          getLatLng: () => {
+            const coords = getRepresentativePoint(item.feature.geometry);
+            return coords ? { lat: coords[1], lng: coords[0] } : { lat: 0, lng: 0 };
+          }
+        });
+      });
+      selectedFeatures.polygons.forEach(item => {
+        exportItems.push({
+          feature: item.feature,
+          markerData: { rowData: item.feature.properties || {} },
+          getLatLng: () => {
+            const coords = getRepresentativePoint(item.feature.geometry);
+            return coords ? { lat: coords[1], lng: coords[0] } : { lat: 0, lng: 0 };
+          }
+        });
+      });
+    }
+  } else {
+    exportItems = [...markers];
+    if (importedLayers) {
+      importedLayers.eachLayer(layer => {
+        if ((layer instanceof L.Marker || layer instanceof L.CircleMarker) && !exportItems.includes(layer)) {
+          exportItems.push(layer);
+        }
+      });
+    }
   }
 
-  if (exportMarkers.length === 0) {
+  if (exportItems.length === 0) {
     if (typeof showToast === 'function') {
-      showToast("No point data on map to export", "warning");
+      showToast("No data selected to export", "warning");
     } else {
-      alert("No point data on map to export");
+      alert("No data selected to export");
     }
     return;
   }
-  handleMapExcelCSVExport(exportMarkers, 'xlsx');
+  handleMapExcelCSVExport(exportItems, 'xlsx');
 }
 
 function exportToCSV() {
-  let exportMarkers = selectedMarkers.length > 0 ? selectedMarkers : [...markers];
-  
-  // Include points from imported layers
-  if (importedLayers) {
-    importedLayers.eachLayer(layer => {
-      if ((layer instanceof L.Marker || layer instanceof L.CircleMarker) && !exportMarkers.includes(layer)) {
-        exportMarkers.push(layer);
-      }
-    });
+  const isSelectionActive = selectedMarkers.length > 0 || (selectedFeatures && (selectedFeatures.lines.length > 0 || selectedFeatures.polygons.length > 0));
+
+  let exportItems = [];
+  if (isSelectionActive) {
+    exportItems = [...selectedMarkers];
+    if (selectedFeatures) {
+      selectedFeatures.lines.forEach(item => {
+        exportItems.push({
+          feature: item.feature,
+          markerData: { rowData: item.feature.properties || {} },
+          getLatLng: () => {
+            const coords = getRepresentativePoint(item.feature.geometry);
+            return coords ? { lat: coords[1], lng: coords[0] } : { lat: 0, lng: 0 };
+          }
+        });
+      });
+      selectedFeatures.polygons.forEach(item => {
+        exportItems.push({
+          feature: item.feature,
+          markerData: { rowData: item.feature.properties || {} },
+          getLatLng: () => {
+            const coords = getRepresentativePoint(item.feature.geometry);
+            return coords ? { lat: coords[1], lng: coords[0] } : { lat: 0, lng: 0 };
+          }
+        });
+      });
+    }
+  } else {
+    exportItems = [...markers];
+    if (importedLayers) {
+      importedLayers.eachLayer(layer => {
+        if ((layer instanceof L.Marker || layer instanceof L.CircleMarker) && !exportItems.includes(layer)) {
+          exportItems.push(layer);
+        }
+      });
+    }
   }
 
-  if (exportMarkers.length === 0) {
+  if (exportItems.length === 0) {
     if (typeof showToast === 'function') {
-      showToast("No point data on map to export", "warning");
+      showToast("No data selected to export", "warning");
     } else {
-      alert("No point data on map to export");
+      alert("No data selected to export");
     }
     return;
   }
-  handleMapExcelCSVExport(exportMarkers, 'csv');
+  handleMapExcelCSVExport(exportItems, 'csv');
 }
 
 function handleMapExcelCSVExport(exportMarkers, format) {

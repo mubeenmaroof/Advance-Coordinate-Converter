@@ -31,6 +31,7 @@ let convexHullLayer = null;
 let isConvexHullActive = false;
 let isLabelsActive = false;
 let selectedMarkers = [];
+let selectedFeatures = { points: [], lines: [], polygons: [] };
 let lastSelectionLayer = null;
 
 // Shape colors for multiple polygons/rectangles/circles
