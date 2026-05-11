@@ -193,9 +193,8 @@ function extractCoordinatesFromKmlGeoJson(geoJson) {
 
   if (geoJson.type === "FeatureCollection") {
     geoJson.features.forEach((feature, featureIndex) => {
-      const extracted = extractCoordinatesFromKmlFeature(feature, featureIndex, globalIndex);
+      const extracted = extractCoordinatesFromKmlFeature(feature, featureIndex, coordinates.length);
       coordinates.push(...extracted);
-      globalIndex += extracted.length;
     });
   } else if (geoJson.type === "Feature") {
     coordinates.push(...extractCoordinatesFromKmlFeature(geoJson, 0, 0));
@@ -211,22 +210,24 @@ function extractCoordinatesFromKmlFeature(feature, featureIndex, globalStartInde
 
   if (!geometry) return coordinates;
 
-  const coords = extractKmlCoordsFromGeometry(geometry);
-  coords.forEach((coord, idx) => {
+  // Standardize: Use ONE representative point per feature for the preview UI and store
+  const repPoint = getRepresentativePoint(geometry);
+  
+  if (repPoint) {
     const propsWithId = { ...properties };
     if (!propsWithId['ObjectID']) {
-      propsWithId['ObjectID'] = globalStartIndex + idx + 1;
+      propsWithId['ObjectID'] = globalStartIndex + 1;
     }
 
     coordinates.push({
-      lat: coord[1],
-      lng: coord[0],
+      lat: repPoint[1],
+      lng: repPoint[0],
       properties: propsWithId,
       featureIndex: featureIndex,
-      coordIndex: globalStartIndex + idx,
+      coordIndex: globalStartIndex,
       geometryType: geometry.type
     });
-  });
+  }
 
   return coordinates;
 }
@@ -286,12 +287,14 @@ function renderKmlSuccessUI(fileName, count) {
         <h3 style="margin: 0;">✅ ${fileName}</h3>
         <p style="margin: 5px 0; color: #666;">
           Format: <b>${format}</b> | 
-          Coordinates: <b>${count}</b> | 
           Types: <b>${Array.from(geomTypes).join(', ') || 'N/A'}</b>
         </p>
         <div style="margin-top: 12px; padding: 12px; background: ${hasAnyData ? '#f0f7ff' : '#fff3cd'}; border-left: 3px solid ${hasAnyData ? '#667eea' : '#ffc107'}; border-radius: 4px; font-size: 0.95em;">
           <strong style="color: ${hasAnyData ? '#667eea' : '#856404'};">📋 Geometry Categories Found:</strong>
           <div style="margin-top: 8px;">${categorySelectionHtml}</div>
+          <div style="background: rgba(102, 126, 234, 0.1); color: #667eea; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85em; margin-top: 10px; display: inline-block;">
+            📍 ${count} Features
+          </div>
         </div>
       </div>
     </div>
@@ -301,8 +304,9 @@ function renderKmlSuccessUI(fileName, count) {
         <thead>
           <tr>
             <th>#</th>
-            <th>Lat</th>
-            <th>Lng</th>
+            <th>Latitude</th>
+            <th>Longitude</th>
+            <th>Type</th>
             ${sortedKeys.map(key => `<th>${key}</th>`).join('')}
           </tr>
         </thead>
@@ -310,12 +314,13 @@ function renderKmlSuccessUI(fileName, count) {
           ${kmlCoordinateStore.slice(0, displayCount).map((c, i) => `
             <tr>
               <td>${i + 1}</td>
-              <td>${c.lat.toFixed(6)}</td>
-              <td>${c.lng.toFixed(6)}</td>
-              ${sortedKeys.map(key => `<td>${c.properties && c.properties[key] !== undefined ? c.properties[key] : ''}</td>`).join('')}
+              <td style="font-family: monospace;">${c.lat.toFixed(6)}</td>
+              <td style="font-family: monospace;">${c.lng.toFixed(6)}</td>
+              <td><span class="badge" style="background: #f1f5f9; color: #475569; font-size: 10px;">${c.geometryType}</span></td>
+              ${sortedKeys.map(key => `<td>${c.properties && c.properties[key] !== undefined ? (typeof c.properties[key] === 'object' ? JSON.stringify(c.properties[key]) : c.properties[key]) : '-'}</td>`).join('')}
             </tr>
           `).join('')}
-          ${count > displayCount ? `<tr><td colspan="${sortedKeys.length + 3}" style="text-align: center; padding: 15px; background: #f8f9fa; font-style: italic; color: #666;">Showing first 500 of ${count} rows. Use "Show on Map" to see all spatial data.</td></tr>` : ''}
+          ${count > displayCount ? `<tr><td colspan="${sortedKeys.length + 4}" style="text-align: center; padding: 15px; background: #f8f9fa; font-style: italic; color: #666;">Showing first ${displayCount} of ${count} features. Use "Show on Map" to see all spatial data.</td></tr>` : ''}
         </tbody>
       </table>
     </div>
@@ -361,16 +366,20 @@ function getKmlCategoryCounts(geoJson) {
     const geom = feature.geometry;
     if (!geom || !geom.type) return;
 
-    if (['Point', 'MultiPoint'].includes(geom.type)) counts.Points += 1;
-    else if (['LineString', 'MultiLineString'].includes(geom.type)) counts.Lines += 1;
-    else if (['Polygon', 'MultiPolygon'].includes(geom.type)) counts.Polygons += 1;
-    else if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries)) {
-      geom.geometries.forEach(sub => {
-        if (!sub || !sub.type) return;
+    if (['Point', 'MultiPoint'].includes(geom.type)) {
+      counts.Points += 1;
+    } else if (['LineString', 'MultiLineString'].includes(geom.type)) {
+      counts.Lines += 1;
+    } else if (['Polygon', 'MultiPolygon'].includes(geom.type)) {
+      counts.Polygons += 1;
+    } else if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries) && geom.geometries.length > 0) {
+      // Count based on the first valid sub-geometry
+      const sub = geom.geometries[0];
+      if (sub && sub.type) {
         if (['Point', 'MultiPoint'].includes(sub.type)) counts.Points += 1;
         else if (['LineString', 'MultiLineString'].includes(sub.type)) counts.Lines += 1;
         else if (['Polygon', 'MultiPolygon'].includes(sub.type)) counts.Polygons += 1;
-      });
+      }
     }
   });
 

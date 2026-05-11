@@ -431,16 +431,20 @@ function getShpCategoryCounts(geoJson) {
     const geom = feature.geometry;
     if (!geom || !geom.type) return;
 
-    if (['Point', 'MultiPoint'].includes(geom.type)) counts.Points += 1;
-    else if (['LineString', 'MultiLineString'].includes(geom.type)) counts.Lines += 1;
-    else if (['Polygon', 'MultiPolygon'].includes(geom.type)) counts.Polygons += 1;
-    else if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries)) {
-      geom.geometries.forEach(sub => {
-        if (!sub || !sub.type) return;
+    if (['Point', 'MultiPoint'].includes(geom.type)) {
+      counts.Points += 1;
+    } else if (['LineString', 'MultiLineString'].includes(geom.type)) {
+      counts.Lines += 1;
+    } else if (['Polygon', 'MultiPolygon'].includes(geom.type)) {
+      counts.Polygons += 1;
+    } else if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries) && geom.geometries.length > 0) {
+      // For GeometryCollection, count based on the first valid sub-geometry to avoid "exceeded" counts
+      const sub = geom.geometries[0];
+      if (sub && sub.type) {
         if (['Point', 'MultiPoint'].includes(sub.type)) counts.Points += 1;
         else if (['LineString', 'MultiLineString'].includes(sub.type)) counts.Lines += 1;
         else if (['Polygon', 'MultiPolygon'].includes(sub.type)) counts.Polygons += 1;
-      });
+      }
     }
   });
 

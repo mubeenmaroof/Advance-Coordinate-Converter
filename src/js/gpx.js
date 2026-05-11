@@ -68,9 +68,8 @@ function extractCoordinatesFromGpxGeoJson(geoJson) {
 
   if (geoJson.type === "FeatureCollection") {
     geoJson.features.forEach((feature, featureIndex) => {
-      const extracted = extractCoordinatesFromGpxFeature(feature, featureIndex, globalIndex);
+      const extracted = extractCoordinatesFromGpxFeature(feature, featureIndex, coordinates.length);
       coordinates.push(...extracted);
-      globalIndex += extracted.length;
     });
   }
   return coordinates;
@@ -83,21 +82,24 @@ function extractCoordinatesFromGpxFeature(feature, featureIndex, globalStartInde
 
   if (!geometry) return coordinates;
 
-  // Use the same coordinate extraction logic as KML/GeoJSON
-  const coords = extractCoordsFromGeometry(geometry);
-  coords.forEach((coord, idx) => {
+  // Standardize: Use ONE representative point per feature for the preview UI and store
+  const repPoint = getRepresentativePoint(geometry);
+  
+  if (repPoint) {
     const propsWithId = { ...properties };
-    propsWithId['ObjectID'] = globalStartIndex + idx + 1;
+    if (!propsWithId['ObjectID']) {
+      propsWithId['ObjectID'] = globalStartIndex + 1;
+    }
     
     coordinates.push({
-      lat: coord[1],
-      lng: coord[0],
+      lat: repPoint[1],
+      lng: repPoint[0],
       properties: propsWithId,
       featureIndex: featureIndex,
-      coordIndex: idx,
+      coordIndex: globalStartIndex,
       geometryType: geometry.type
     });
-  });
+  }
 
   return coordinates;
 }
@@ -124,7 +126,7 @@ function renderGpxSuccessUI(fileName, count) {
           </p>
         </div>
         <div style="background: rgba(102, 126, 234, 0.1); color: #667eea; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85em;">
-          📍 ${count} Coordinates
+          📍 ${count} Features
         </div>
       </div>
 
@@ -136,7 +138,8 @@ function renderGpxSuccessUI(fileName, count) {
               <th>Latitude</th>
               <th>Longitude</th>
               <th>Type</th>
-              <th>Name/Desc</th>
+              <th>Name</th>
+              <th>Time</th>
             </tr>
           </thead>
           <tbody>
@@ -145,17 +148,18 @@ function renderGpxSuccessUI(fileName, count) {
                 <td>${i + 1}</td>
                 <td style="font-family: monospace;">${c.lat.toFixed(6)}</td>
                 <td style="font-family: monospace;">${c.lng.toFixed(6)}</td>
-                <td><span class="badge" style="background: #f1f5f9; color: #475569; font-size: 10px;">${c.geometryType || 'Point'}</span></td>
-                <td>${c.properties.name || c.properties.desc || '-'}</td>
+                <td><span class="badge" style="background: #f1f5f9; color: #475569; font-size: 10px;">${c.geometryType}</span></td>
+                <td>${c.properties.name || '-'}</td>
+                <td>${c.properties.time ? new Date(c.properties.time).toLocaleString() : '-'}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       </div>
-
+      
       ${count > displayCount ? `
         <p style="font-size: 0.8em; color: #64748b; margin-top: 10px; font-style: italic; padding-left: 5px;">
-          * Showing first 10 coordinates. All ${count} features will be rendered on the map.
+          * Showing first ${displayCount} of ${count} features. Use "Show on Map" to see all spatial data.
         </p>
       ` : ''}
 

@@ -2344,24 +2344,46 @@ function updateMapStats() {
   };
 
   // Update logic
-  if (locElem) animateUpdate(locElem, markers.length);
+  let totalPoints = markers.length;
+  let polyCount = 0, rectCount = 0, circCount = 0, lineCount = 0;
 
+  // 1. Count from Markers (Points)
+  if (locElem) animateUpdate(locElem, totalPoints);
+
+  // 2. Count from Drawn Items
   if (drawnItems) {
     const layers = drawnItems.getLayers();
-    animateUpdate(shapeElem, layers.length);
-
-    // Breakdown counts
-    let polyCount = 0, rectCount = 0, circCount = 0;
     layers.forEach(layer => {
       if (layer instanceof L.Rectangle) rectCount++;
       else if (layer instanceof L.Polygon) polyCount++;
       else if (layer instanceof L.Circle) circCount++;
+      else if (layer instanceof L.Polyline) lineCount++;
     });
-
-    if (polyElem) animateUpdate(polyElem, polyCount);
-    if (rectElem) animateUpdate(rectElem, rectCount);
-    if (circElem) animateUpdate(circElem, circCount);
   }
+
+  // 3. Count from Imported Layers (Vector data)
+  if (importedLayers) {
+    importedLayers.eachLayer(layer => {
+      // Avoid double counting markers already in markers array
+      if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+        if (!markers.includes(layer)) {
+           // This might be a marker from importedLayers that isn't in markers array
+           // totalPoints++; // Optional: Decide if these should be in "Total Locations"
+        }
+      } else if (layer instanceof L.Rectangle) {
+        rectCount++;
+      } else if (layer instanceof L.Polygon) {
+        polyCount++;
+      } else if (layer instanceof L.Polyline) {
+        lineCount++;
+      }
+    });
+  }
+
+  if (shapeElem) animateUpdate(shapeElem, polyCount + rectCount + circCount + lineCount);
+  if (polyElem) animateUpdate(polyElem, polyCount);
+  if (rectElem) animateUpdate(rectElem, rectCount);
+  if (circElem) animateUpdate(circElem, circCount);
 
   if (zoomInput && map) animateUpdate(zoomInput, map.getZoom());
 }

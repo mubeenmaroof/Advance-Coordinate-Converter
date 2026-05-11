@@ -303,7 +303,7 @@ function renderJsonSuccessUI(fileName, format, count) {
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
           <div style="background: rgba(102, 126, 234, 0.1); color: #667eea; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85em;">
-            📍 ${count} Coordinates
+            📍 ${count} Features
           </div>
           <button class="btn" onclick="discoverAndShowMapping(currentGeoJsonData, '${fileName}')" style="font-size: 0.75em; padding: 4px 8px; background: transparent; border: 1px solid #cbd5e1; color: #64748b;">⚙️ Re-Map Keys</button>
         </div>
@@ -336,7 +336,7 @@ function renderJsonSuccessUI(fileName, format, count) {
       
       ${count > displayCount ? `
         <p style="font-size: 0.8em; color: #64748b; margin-top: 10px; font-style: italic; padding-left: 5px;">
-          * Showing first 10 coordinates. All ${count} features will be rendered on the map.
+          * Showing first ${displayCount} of ${count} features. Use "Show on Map" to see all spatial data.
         </p>
       ` : ''}
 
@@ -357,11 +357,9 @@ function renderJsonSuccessUI(fileName, format, count) {
 // Reuse existing logic for standard GeoJSON features
 function extractCoordinatesFromGeoJson(featureCollection) {
   const coordinates = [];
-  let globalIndex = 0;
-  featureCollection.features.forEach((feature, index) => {
-    const extracted = extractCoordinatesFromFeature(feature, index, globalIndex);
+  featureCollection.features.forEach((feature, featureIndex) => {
+    const extracted = extractCoordinatesFromFeature(feature, featureIndex, coordinates.length);
     coordinates.push(...extracted);
-    globalIndex += extracted.length;
   });
   return coordinates;
 }
@@ -373,23 +371,24 @@ function extractCoordinatesFromFeature(feature, featureIndex = 0, globalStartInd
 
   if (!geometry) return coordinates;
 
-  const coords = extractCoordsFromGeometry(geometry);
-  coords.forEach((coord, idx) => {
-    // Clone properties to avoid modifying original and add ObjectID
+  // Standardize: Use ONE representative point per feature for the preview UI and store
+  const repPoint = getRepresentativePoint(geometry);
+  
+  if (repPoint) {
     const propsWithId = { ...properties };
     if (!propsWithId['ObjectID']) {
-      propsWithId['ObjectID'] = globalStartIndex + idx + 1;
+      propsWithId['ObjectID'] = globalStartIndex + 1;
     }
 
     coordinates.push({
-      lat: coord[1],
-      lng: coord[0],
+      lat: repPoint[1],
+      lng: repPoint[0],
       properties: propsWithId,
       featureIndex: featureIndex,
-      coordIndex: globalStartIndex + idx,
-      geometryType: geometry.type // Preserve type (Point, LineString, etc.)
+      coordIndex: globalStartIndex,
+      geometryType: geometry.type
     });
-  });
+  }
 
   return coordinates;
 }
