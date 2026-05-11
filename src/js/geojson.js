@@ -273,6 +273,8 @@ function parsePair(latVal, lngVal, properties) {
 
 function renderJsonSuccessUI(fileName, format, count) {
   const resultDiv = document.getElementById("geoJsonResult");
+  const clearBtn = document.getElementById("geoJsonClearBtnGroup");
+  if (clearBtn) clearBtn.style.display = "block";
   
   // Discover all unique property keys
   const propertyKeys = new Set();
@@ -455,7 +457,7 @@ function showGeoJsonOnMap() {
           const serialNumber = (geoJsonCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
           
           if (typeof addDetailedMarker === "function") {
-             const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1, feature);
              if (marker) importedLayers.addLayer(marker);
              return L.layerGroup(); 
           }

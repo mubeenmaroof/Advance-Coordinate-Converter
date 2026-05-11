@@ -259,6 +259,8 @@ function extractKmlCoordsFromGeometry(geometry) {
 
 function renderKmlSuccessUI(fileName, count) {
   const resultDiv = document.getElementById("kmlResult");
+  const clearBtn = document.getElementById("kmlClearBtnGroup");
+  if (clearBtn) clearBtn.style.display = "block";
   const isKmz = fileName.toLowerCase().endsWith('.kmz');
   const format = isKmz ? "KMZ (Compressed KML)" : "KML";
 
@@ -559,6 +561,9 @@ function showKmlOnMap() {
       const geoLayer = L.geoJSON(currentKmlData, {
         renderer: renderer,
         onEachFeature: function (feature, layer) {
+          // Store the feature data on the layer for selection purposes
+          layer.feature = feature;
+
           if (feature.properties) {
             const props = { ...feature.properties };
             if (feature.geometry.type.includes("Polygon")) props.TYPE = "Polygon";
@@ -576,7 +581,7 @@ function showKmlOnMap() {
           const serialNumber = (kmlCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
           
           if (typeof addDetailedMarker === "function") {
-             const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1, feature);
              if (marker) importedLayers.addLayer(marker);
              return L.layerGroup(); 
           }

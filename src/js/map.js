@@ -742,213 +742,95 @@ function showDrawnShapesInfo() {
 }
 
 function filterPointsByDrawing(layer) {
-  console.log("🎯 filterPointsByDrawing called");
-  console.log("Layer type:", layer.constructor.name);
-  console.log("Total markers on map:", markers.length);
-  console.log("Turf available:", !!window.turf);
-
   if (!window.turf) {
     console.error("❌ Turf.js not loaded!");
     showToast("Turf.js library not loaded. Cannot select markers.", "error");
     return;
   }
 
-  if (!markers || markers.length === 0) {
-    console.warn("⚠️ No markers to filter!");
-    showToast(
-      "No markers on the map to select. Please add some locations first.",
-      "warning",
-    );
-    return;
-  }
-
   try {
-    selectedMarkers = []; // Reset selected markers
-    lastSelectionLayer = layer;
-    let count = 0;
 
-    // Handle different shape types
-    let isInsideFunction = null;
-    let selectionGeoJSON = null;
+  // Reset selection state
+  selectedMarkers = [];
+  selectedFeatures = { points: [], lines: [], polygons: [] };
+  let count = 0;
 
-    if (layer instanceof L.Circle) {
-      // Circle selection logic
-      const center = layer.getLatLng();
-      const radius = layer.getRadius(); // in meters
-      console.log("Circle detected - radius:", radius, "meters");
+  // Handle different shape types for spatial query
+  let isInsideFunction = null;
+  let selectionGeoJSON = null;
 
-      // Create a circular polygon for spatial queries (lines, polygons)
-      const centerPoint = turf.point([center.lng, center.lat]);
-      selectionGeoJSON = turf.circle(centerPoint, radius / 1000, { units: 'kilometers' }); // Convert radius to km
-      console.log("Circle GeoJSON created:", selectionGeoJSON);
+  if (layer instanceof L.Circle) {
+    const center = layer.getLatLng();
+    const radius = layer.getRadius();
+    const centerPoint = turf.point([center.lng, center.lat]);
+    selectionGeoJSON = turf.circle(centerPoint, radius / 1000, { units: 'kilometers' });
 
-      isInsideFunction = (marker) => {
-        const markerPoint = turf.point([
-          marker.getLatLng().lng,
-          marker.getLatLng().lat,
-        ]);
-        const centerPoint = turf.point([center.lng, center.lat]);
-        const distance = turf.distance(centerPoint, markerPoint, {
-          units: "meters",
-        });
-        return distance <= radius;
+    isInsideFunction = (l) => {
+      if (!l.getLatLng) return false;
+      const p = l.getLatLng();
+      const markerPoint = turf.point([p.lng, p.lat]);
+      const distance = turf.distance(centerPoint, markerPoint, { units: "meters" });
+      return distance <= radius;
+    };
+  } else if (layer instanceof L.Polygon || layer instanceof L.Rectangle || layer instanceof L.Polyline) {
+    try {
+      selectionGeoJSON = layer.toGeoJSON();
+      isInsideFunction = (l) => {
+        if (!l.getLatLng) return false;
+        const p = l.getLatLng();
+        const markerPoint = turf.point([p.lng, p.lat]);
+        return turf.booleanPointInPolygon(markerPoint, selectionGeoJSON);
       };
-    } else if (
-      layer instanceof L.Polygon ||
-      layer instanceof L.Rectangle ||
-      layer instanceof L.Polyline
-    ) {
-      // Polygon/Rectangle/Polyline selection logic
-      console.log("Polygon/Rectangle detected");
-      try {
-        selectionGeoJSON = layer.toGeoJSON();
-        console.log("Shape GeoJSON:", selectionGeoJSON);
-
-        // For any polygon-like shape, use point-in-polygon
-        isInsideFunction = (marker) => {
-          const markerPoint = turf.point([
-            marker.getLatLng().lng,
-            marker.getLatLng().lat,
-          ]);
-          try {
-            return turf.booleanPointInPolygon(markerPoint, selectionGeoJSON);
-          } catch (err) {
-            console.error("Error in booleanPointInPolygon:", err);
-            return false;
-          }
-        };
-      } catch (err) {
-        console.error("Error converting shape to GeoJSON:", err);
-        showToast(
-          "Error processing the drawn shape. Please try again.",
-          "error",
-        );
-        return;
-      }
-    } else {
-      console.error("Unknown shape type:", layer);
-      showToast(
-        "Unknown shape type. Please use Polygon, Rectangle, or Circle.",
-        "error",
-      );
+    } catch (err) {
+      console.error("Error converting selection shape to GeoJSON:", err);
+      showToast("Error processing selection shape.", "error");
       return;
     }
+  }
 
-    // Apply the selection logic to all markers
-    markers.forEach((marker) => {
-      try {
-        const isInside = isInsideFunction(marker);
+  // Iterate over ALL layers currently on the map to find matches
+  map.eachLayer((l) => {
+    // Skip the selection layer itself and other UI elements
+    if (l === layer || l === drawnItems || l === markerClusterGroup || l === measurementLayers) return;
 
-        if (isInside) {
-          // Apply a visual highlight
-          if (marker._icon) {
-            marker._icon.style.filter =
-              "hue-rotate(120deg) drop-shadow(0 0 8px #00ff00) brightness(1.2)";
-            marker._icon.style.zIndex = "100";
-          }
-          marker.isSelected = true;
-          selectedMarkers.push(marker);
+    try {
+      let feature = l.feature || {
+        type: 'Feature',
+        properties: l.markerData?.rowData || l.options?.rowData || {},
+        geometry: null
+      };
+
+      // 1. Handle Points (Markers & CircleMarkers)
+      if (l instanceof L.Marker || l instanceof L.CircleMarker) {
+        const isSelected = isInsideFunction ? isInsideFunction(l) : false;
+        if (isSelected) {
+          if (l._icon) l._icon.style.filter = "none";
+          selectedMarkers.push(l);
+          selectedFeatures.points.push({ layer: l, feature: feature });
           count++;
-        } else {
-          marker.isSelected = false;
-          if (marker._icon) {
-            marker._icon.style.filter = "grayscale(80%) opacity(0.4)";
-          }
+        } else if (l._icon) {
+          l._icon.style.filter = "grayscale(80%) opacity(0.4)";
         }
-      } catch (err) {
-        console.error("Error processing marker:", marker, err);
       }
-    });
-
-    // Also select features from imported layers (polylines, polygons)
-    selectedFeatures = { points: [], lines: [], polygons: [] };
-
-    console.log("🔍 Starting feature detection from imported layers...");
-    console.log("importedLayers exists:", !!importedLayers);
-    console.log("selectionGeoJSON exists:", !!selectionGeoJSON);
-
-    if (importedLayers) {
-      let layerCount = 0;
-      let geometryCounts = { Point: 0, LineString: 0, MultiLineString: 0, Polygon: 0, MultiPolygon: 0 };
-
-      importedLayers.eachLayer((geoLayer) => {
-        layerCount++;
+      // 2. Handle Lines and Polygons
+      else if (l instanceof L.Polyline && selectionGeoJSON) {
         try {
-          // For GeoJSON layers, the feature data is stored in the layer.feature property
-          const feature = geoLayer.feature;
-          if (!feature || !feature.geometry) {
-            console.warn(`Layer ${layerCount}: Missing feature or geometry`);
-            return;
-          }
-
-          const geomType = feature.geometry.type;
-          geometryCounts[geomType] = (geometryCounts[geomType] || 0) + 1;
-
-          console.log(`Layer ${layerCount}: Type=${geomType}, has properties:`, !!feature.properties);
-          let isSelected = false;
-
-          if (geomType === 'Point') {
-            // Avoid duplicates if this layer is already selected in the primary markers loop
-            if (selectedMarkers.includes(geoLayer)) {
-              console.log(`Layer ${layerCount}: Point already in selectedMarkers, skipping duplicate`);
-              return;
-            }
-
-            const point = turf.point(feature.geometry.coordinates);
-            if (selectionGeoJSON) {
-              isSelected = turf.booleanPointInPolygon(point, selectionGeoJSON);
-            } else if (isInsideFunction) {
-              isSelected = isInsideFunction({ getLatLng: () => ({ lat: feature.geometry.coordinates[1], lng: feature.geometry.coordinates[0] }) });
-            }
-            if (isSelected) {
-              console.log(`✓ Point selected`);
-              selectedFeatures.points.push({ layer: geoLayer, feature: feature });
-            }
-          } else if (geomType === 'LineString' || geomType === 'MultiLineString') {
-            // Check if line intersects with selection (works for both circles and polygons)
-            if (selectionGeoJSON) {
-              try {
-                const intersects = turf.booleanIntersects(feature, selectionGeoJSON);
-                console.log(`Line/MultiLineString: booleanIntersects result =`, intersects);
-                if (intersects) {
-                  console.log(`✓ Line selected`);
-                  selectedFeatures.lines.push({ layer: geoLayer, feature: feature });
-                }
-              } catch (err) {
-                console.error("Line intersection check failed:", err.message);
-              }
+          const layerGeoJSON = l.toGeoJSON();
+          if (turf.booleanIntersects(layerGeoJSON, selectionGeoJSON)) {
+            if (l instanceof L.Polygon) {
+              selectedFeatures.polygons.push({ layer: l, feature: feature });
             } else {
-              console.log("LineString: selectionGeoJSON is null, skipping");
-            }
-          } else if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
-            // Check if polygon intersects or is within selection
-            if (selectionGeoJSON) {
-              try {
-                const intersects = turf.booleanIntersects(feature, selectionGeoJSON);
-                console.log(`Polygon/MultiPolygon: booleanIntersects result =`, intersects);
-                if (intersects) {
-                  console.log(`✓ Polygon selected`);
-                  selectedFeatures.polygons.push({ layer: geoLayer, feature: feature });
-                }
-              } catch (err) {
-                console.error("Polygon intersection check failed:", err.message);
-              }
-            } else {
-              console.log("Polygon: selectionGeoJSON is null, skipping");
+              selectedFeatures.lines.push({ layer: l, feature: feature });
             }
           }
-        } catch (err) {
-          console.error(`Layer ${layerCount} error:`, err.message);
+        } catch (e) {
+          // Geometry might be complex, but toGeoJSON + booleanIntersects is robust
         }
-      });
-      console.log(`📊 Total layers processed: ${layerCount}`);
-      console.log(`📊 Geometry type counts:`, geometryCounts);
-      console.log(`📊 Selected features:`, selectedFeatures);
-    } else {
-      console.log("⚠️ importedLayers is not available");
+      }
+    } catch (err) {
+      // Skip layers that don't support these operations
     }
-
-    console.log("✅ Selected markers count:", count);
+  });
     console.log("Selected features by type:", selectedFeatures);
     console.log("Selected markers:", selectedMarkers);
 
@@ -2436,7 +2318,7 @@ function addMarkerFromInput(input) {
   }
 }
 
-function addDetailedMarker(lat, lng, rowData, rowIndex) {
+function addDetailedMarker(lat, lng, rowData, rowIndex, feature = null) {
   const icon = createMarkerIcon(currentMarkerStyle, rowIndex);
   const marker = L.marker([lat, lng], { icon: icon });
 
@@ -2452,6 +2334,10 @@ function addDetailedMarker(lat, lng, rowData, rowIndex) {
     rowData: rowData,
     rowIndex: rowIndex,
   };
+
+  if (feature) {
+    marker.feature = feature;
+  }
 
   // Bind premium popup
   const popupHTML = createPremiumPopupHTML(lat, lng, rowData, rowIndex);

@@ -107,6 +107,8 @@ function extractCoordinatesFromGpxFeature(feature, featureIndex, globalStartInde
 
 function renderGpxSuccessUI(fileName, count) {
   const resultDiv = document.getElementById("gpxResult");
+  const clearBtn = document.getElementById("gpxClearBtnGroup");
+  if (clearBtn) clearBtn.style.display = "block";
   
   const geomTypes = new Set();
   gpxCoordinateStore.forEach(c => {
@@ -198,6 +200,9 @@ function showGpxOnMap() {
       const geoLayer = L.geoJSON(currentGpxData, {
         renderer: renderer,
         onEachFeature: function (feature, layer) {
+          // Store the feature data on the layer for selection purposes
+          layer.feature = feature;
+
           if (feature.properties) {
             const props = { ...feature.properties };
             if (feature.geometry.type.includes("Line")) props.TYPE = "Track/Route";
@@ -214,7 +219,7 @@ function showGpxOnMap() {
           const serialNumber = (gpxCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
 
           if (typeof addDetailedMarker === "function") {
-             addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1);
+             addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1, feature);
              return L.layerGroup(); 
           }
 

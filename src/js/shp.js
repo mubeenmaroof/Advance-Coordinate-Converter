@@ -701,7 +701,7 @@ function showShpOnMap() {
 
           // Use standard detailed marker for consistency with Excel/CSV
           if (typeof addDetailedMarker === "function") {
-            const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber);
+            const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber, feature);
             if (marker && typeof importedLayers !== 'undefined') {
               importedLayers.addLayer(marker);
             }
