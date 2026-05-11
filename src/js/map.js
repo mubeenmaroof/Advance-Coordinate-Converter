@@ -1076,17 +1076,15 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer, selectedFeatur
                 <div style="font-size: 24px; font-weight: 900; margin-top: 2px;">${totalCount}</div>
             </div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
-             
                 <button title="Copy coordinates" onclick="copySelectedCoordinates()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📋 Copy</button>
                 <button title="Export as Excel" onclick="exportToExcel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 Excel</button>
                 <button title="Export as GeoJSON" onclick="exportToGeoJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">🌍 GeoJSON</button>
                 <button title="Export as KML" onclick="exportToKML()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📍 KML</button>
-                <button title="Copy coordinates" onclick="copySelectedCoordinates()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">📋 Copy</button>
                 <button title="Export as CSV" onclick="exportToCSV()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">📊 CSV</button>
+                <button title="Export as JSON" onclick="exportToJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">📄 JSON</button>
                 <button title="Export as SHP" onclick="exportToShp()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">📦 SHP</button>
                 <button title="Minimize/Maximize" id="btnMinimizeSelection" onclick="toggleMinimizeSelection()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">−</button>
                 <button title="Close panel" onclick="closeSelectedPanel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">✕</button>
-               
             </div>
         </div>
         ${totalCount > 0 ? tabsHTML : ''}
