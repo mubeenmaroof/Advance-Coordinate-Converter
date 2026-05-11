@@ -1620,17 +1620,51 @@ function collectAllMapFeatures(dataSource) {
     }
   }
 
-  // Flatten GeometryCollections which cause issues in exports (like shpwrite or custom KML export)
+  // Consolidate GeometryCollections to avoid unnecessary splitting which inflates feature counts
   const finalFeatures = [];
   features.forEach(f => {
     if (f && f.geometry && f.geometry.type === 'GeometryCollection' && Array.isArray(f.geometry.geometries)) {
-      f.geometry.geometries.forEach(geom => {
-        finalFeatures.push({
-          type: "Feature",
-          geometry: geom,
-          properties: { ...f.properties }
+      const geoms = f.geometry.geometries.filter(g => g && g.coordinates);
+      if (geoms.length === 0) return;
+
+      const types = new Set(geoms.map(g => g.type));
+      
+      // If all sub-geometries are of types that can be combined (e.g. all Polygons/MultiPolygons)
+      const isAllPolygons = Array.from(types).every(t => t === 'Polygon' || t === 'MultiPolygon');
+      const isAllLines = Array.from(types).every(t => t === 'LineString' || t === 'MultiLineString');
+      const isAllPoints = Array.from(types).every(t => t === 'Point' || t === 'MultiPoint');
+
+      if (isAllPolygons) {
+        const combinedCoords = [];
+        geoms.forEach(g => {
+          if (g.type === 'Polygon') combinedCoords.push(g.coordinates);
+          else combinedCoords.push(...g.coordinates);
         });
-      });
+        finalFeatures.push({ type: "Feature", geometry: { type: "MultiPolygon", coordinates: combinedCoords }, properties: { ...f.properties } });
+      } else if (isAllLines) {
+        const combinedCoords = [];
+        geoms.forEach(g => {
+          if (g.type === 'LineString') combinedCoords.push(g.coordinates);
+          else combinedCoords.push(...g.coordinates);
+        });
+        finalFeatures.push({ type: "Feature", geometry: { type: "MultiLineString", coordinates: combinedCoords }, properties: { ...f.properties } });
+      } else if (isAllPoints) {
+        const combinedCoords = [];
+        geoms.forEach(g => {
+          if (g.type === 'Point') combinedCoords.push(g.coordinates);
+          else combinedCoords.push(...g.coordinates);
+        });
+        finalFeatures.push({ type: "Feature", geometry: { type: "MultiPoint", coordinates: combinedCoords }, properties: { ...f.properties } });
+      } else {
+        // Mixed types: must split for most export formats (SHP, KML specific cases)
+        geoms.forEach(geom => {
+          finalFeatures.push({
+            type: "Feature",
+            geometry: geom,
+            properties: { ...f.properties }
+          });
+        });
+      }
     } else if (f) {
       finalFeatures.push(f);
     }
@@ -1652,41 +1686,9 @@ function exportToShp(dataSource, customFileName) {
     return;
   }
 
-  // Flatten MultiGeometries (shpwrite has bugs with MultiLineString and sometimes MultiPolygon)
-  const flattenedFeatures = [];
-  rawFeatures.forEach(f => {
-    if (!f || !f.geometry || !f.geometry.coordinates) return;
-    const type = f.geometry.type;
-    const coords = f.geometry.coordinates;
-
-    if (type === 'MultiLineString') {
-      coords.forEach(lineCoords => {
-        flattenedFeatures.push({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: lineCoords },
-          properties: { ...f.properties }
-        });
-      });
-    } else if (type === 'MultiPolygon') {
-      coords.forEach(polyCoords => {
-        flattenedFeatures.push({
-          type: "Feature",
-          geometry: { type: "Polygon", coordinates: polyCoords },
-          properties: { ...f.properties }
-        });
-      });
-    } else if (type === 'MultiPoint') {
-      coords.forEach(ptCoords => {
-        flattenedFeatures.push({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: ptCoords },
-          properties: { ...f.properties }
-        });
-      });
-    } else {
-      flattenedFeatures.push(f);
-    }
-  });
+  // Note: shpwrite handles MultiGeometries (MultiLineString, MultiPolygon) natively.
+  // We avoid splitting them here to preserve the original feature count.
+  const flattenedFeatures = rawFeatures;
 
   // Flatten properties for DBF compatibility (max 10 char keys, no objects)
   const features = flattenedFeatures.map(f => {
@@ -2152,6 +2154,52 @@ function toggleMeasurement(mode) {
 
   updateGISToolUI();
   alert(`Measurement tool (${mode}) enabled. Click on map to start.`);
+}
+
+function generateKmlGeometry(geom) {
+  if (!geom || !geom.type) return "";
+  const type = geom.type;
+  const coords = geom.coordinates;
+  let kml = "";
+
+  if (type === "Point") {
+    kml += `<Point><coordinates>${coords[0]},${coords[1]},0</coordinates></Point>\n`;
+  } else if (type === "MultiPoint") {
+    kml += "<MultiGeometry>\n";
+    coords.forEach(c => { kml += `<Point><coordinates>${c[0]},${c[1]},0</coordinates></Point>\n`; });
+    kml += "</MultiGeometry>\n";
+  } else if (type === "LineString") {
+    kml += "<LineString><coordinates>";
+    coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+    kml += "</coordinates></LineString>\n";
+  } else if (type === "Polygon") {
+    kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
+    if (Array.isArray(coords[0])) coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+    kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
+  } else if (type === "MultiLineString") {
+    kml += "<MultiGeometry>\n";
+    coords.forEach(line => {
+      kml += "<LineString><coordinates>";
+      line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+      kml += "</coordinates></LineString>\n";
+    });
+    kml += "</MultiGeometry>\n";
+  } else if (type === "MultiPolygon") {
+    kml += "<MultiGeometry>\n";
+    coords.forEach(poly => {
+      kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
+      if (Array.isArray(poly[0])) poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
+      kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
+    });
+    kml += "</MultiGeometry>\n";
+  } else if (type === "GeometryCollection") {
+    kml += "<MultiGeometry>\n";
+    if (Array.isArray(geom.geometries)) {
+      geom.geometries.forEach(sub => { kml += generateKmlGeometry(sub); });
+    }
+    kml += "</MultiGeometry>\n";
+  }
+  return kml;
 }
 
 function onMeasurementClick(e) {
@@ -2706,7 +2754,6 @@ function exportToKML(dataSource, customFileName) {
 
     features.forEach((feature, index) => {
       const type = feature.geometry.type;
-      const coords = feature.geometry.coordinates;
       const props = feature.properties || {};
 
       kml += "<Placemark>\n";
@@ -2715,11 +2762,6 @@ function exportToKML(dataSource, customFileName) {
 
       let description = "<![CDATA[\n";
       description += `<h3>${type} Details</h3>\n`;
-      if (type === "Point") {
-        const lat = Array.isArray(coords) ? coords[1] : 0;
-        const lng = Array.isArray(coords) ? coords[0] : 0;
-        description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
-      }
       if (Object.keys(props).length > 0) {
         description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
         for (const [key, value] of Object.entries(props)) {
@@ -2731,41 +2773,7 @@ function exportToKML(dataSource, customFileName) {
       description += "]]>\n";
       kml += `<description>${description}</description>\n`;
 
-      if (type === "Point") {
-        kml += "<Point>\n";
-        kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
-        kml += "</Point>\n";
-      } else if (type === "MultiPoint") {
-        kml += "<MultiGeometry>\n";
-        coords.forEach(c => {
-          kml += `<Point><coordinates>${c[0]},${c[1]},0</coordinates></Point>\n`;
-        });
-        kml += "</MultiGeometry>\n";
-      } else if (type === "LineString") {
-        kml += "<LineString>\n<coordinates>\n";
-        coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "\n</coordinates>\n</LineString>\n";
-      } else if (type === "Polygon") {
-        kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
-        coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
-      } else if (type === "MultiLineString") {
-        kml += "<MultiGeometry>\n";
-        coords.forEach(line => {
-          kml += "<LineString><coordinates>";
-          line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-          kml += "</coordinates></LineString>\n";
-        });
-        kml += "</MultiGeometry>\n";
-      } else if (type === "MultiPolygon") {
-        kml += "<MultiGeometry>\n";
-        coords.forEach(poly => {
-          kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
-          poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-          kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
-        });
-        kml += "</MultiGeometry>\n";
-      }
+      kml += generateKmlGeometry(feature.geometry);
 
       kml += "</Placemark>\n";
     });
@@ -2817,7 +2825,6 @@ function exportToKMZ(dataSource, customFileName) {
 
     features.forEach((feature, index) => {
       const type = feature.geometry.type;
-      const coords = feature.geometry.coordinates;
       const props = feature.properties || {};
 
       kml += "<Placemark>\n";
@@ -2826,11 +2833,6 @@ function exportToKMZ(dataSource, customFileName) {
 
       let description = "<![CDATA[\n";
       description += `<h3>${type} Details</h3>\n`;
-      if (type === "Point") {
-        const lat = Array.isArray(coords) ? coords[1] : 0;
-        const lng = Array.isArray(coords) ? coords[0] : 0;
-        description += `<p><strong>Coordinates:</strong><br/>Latitude: ${parseFloat(lat).toFixed(6)}<br/>Longitude: ${parseFloat(lng).toFixed(6)}</p>\n`;
-      }
       if (Object.keys(props).length > 0) {
         description += '<table border="1" style="border-collapse: collapse; width: 100%;">\n';
         for (const [key, value] of Object.entries(props)) {
@@ -2842,41 +2844,7 @@ function exportToKMZ(dataSource, customFileName) {
       description += "]]>\n";
       kml += `<description>${description}</description>\n`;
 
-      if (type === "Point") {
-        kml += "<Point>\n";
-        kml += `<coordinates>${coords[0]},${coords[1]},0</coordinates>\n`;
-        kml += "</Point>\n";
-      } else if (type === "MultiPoint") {
-        kml += "<MultiGeometry>\n";
-        coords.forEach(c => {
-          kml += `<Point><coordinates>${c[0]},${c[1]},0</coordinates></Point>\n`;
-        });
-        kml += "</MultiGeometry>\n";
-      } else if (type === "LineString") {
-        kml += "<LineString>\n<coordinates>\n";
-        coords.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "\n</coordinates>\n</LineString>\n";
-      } else if (type === "Polygon") {
-        kml += "<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n";
-        coords[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-        kml += "\n</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n";
-      } else if (type === "MultiLineString") {
-        kml += "<MultiGeometry>\n";
-        coords.forEach(line => {
-          kml += "<LineString><coordinates>";
-          line.forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-          kml += "</coordinates></LineString>\n";
-        });
-        kml += "</MultiGeometry>\n";
-      } else if (type === "MultiPolygon") {
-        kml += "<MultiGeometry>\n";
-        coords.forEach(poly => {
-          kml += "<Polygon><outerBoundaryIs><LinearRing><coordinates>";
-          poly[0].forEach(c => { kml += `${c[0]},${c[1]},0 `; });
-          kml += "</coordinates></LinearRing></outerBoundaryIs></Polygon>\n";
-        });
-        kml += "</MultiGeometry>\n";
-      }
+      kml += generateKmlGeometry(feature.geometry);
 
       kml += "</Placemark>\n";
     });

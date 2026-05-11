@@ -386,7 +386,8 @@ function extractCoordinatesFromFeature(feature, featureIndex = 0, globalStartInd
       properties: propsWithId,
       featureIndex: featureIndex,
       coordIndex: globalStartIndex,
-      geometryType: geometry.type
+      geometryType: geometry.type,
+      geometry: geometry // Preserve original geometry for export
     });
   }
 

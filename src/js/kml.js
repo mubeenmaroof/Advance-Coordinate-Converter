@@ -225,7 +225,8 @@ function extractCoordinatesFromKmlFeature(feature, featureIndex, globalStartInde
       properties: propsWithId,
       featureIndex: featureIndex,
       coordIndex: globalStartIndex,
-      geometryType: geometry.type
+      geometryType: geometry.type,
+      geometry: geometry // Store original geometry for full-fidelity export
     });
   }
 

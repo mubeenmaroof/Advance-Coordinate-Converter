@@ -271,7 +271,8 @@ function processShpData(geojson) {
             properties: properties,
             geometryType: geometry.type,
             featureIndex: featureIndex,
-            coordIndex: 0
+            coordIndex: 0,
+            geometry: geometry // Preserve original geometry
           });
         }
         // For shapes, use the optimized representative point drill-down
@@ -285,7 +286,8 @@ function processShpData(geojson) {
               geometryType: geometry.type,
               featureIndex: featureIndex,
               coordIndex: 0,
-              isVertex: true
+              isVertex: true,
+              geometry: geometry // Preserve original geometry
             });
           }
         }
