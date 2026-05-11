@@ -977,57 +977,60 @@ function filterPointsByDrawing(layer) {
   }
 }
 
-function showToast(message, type = "info") {
-  // Create toast notification instead of blocking alert
-  const toast = document.createElement("div");
-  toast.className = "toast-notification";
-  toast.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    max-width: 400px;
-    padding: 16px 20px;
-    background: ${type === "success"
-      ? "#4caf50"
-      : type === "error"
-        ? "#f44336"
-        : type === "warning"
-          ? "#ff9800"
-          : "#2196f3"
-    };
-    color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    z-index: 999;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    animation: slideInLeft 0.3s ease-out;
-  `;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-
-  // Auto remove after 4 seconds
-  setTimeout(() => {
-    toast.style.animation = "slideOutLeft 0.3s ease-out forwards";
-    setTimeout(() => {
-      if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 300);
-  }, 4000);
-}
+// Toast notification is now in utils.js
 
 function displaySelectedMarkersPanel(selectedMarkersArray, layer, selectedFeatures = { points: [], lines: [], polygons: [] }) {
-  const markerCount = selectedMarkersArray.length;
-  const pointCount = selectedFeatures.points.length;
-  const lineCount = selectedFeatures.lines.length;
-  const polygonCount = selectedFeatures.polygons.length;
-  const totalCount = markerCount + pointCount + lineCount + polygonCount;
+  // 1. Deduplicate Points (standard markers + feature points)
+  const rawPoints = (selectedMarkersArray || []).concat((selectedFeatures.points || []).map(p => ({
+    getLatLng: () => {
+      const coords = p.feature.geometry.coordinates;
+      return { lat: coords[1], lng: coords[0] };
+    },
+    markerData: { rowData: p.feature.properties || {} },
+    isPointFeature: true
+  })));
 
-  console.log("📊 displaySelectedMarkersPanel called:");
-  console.log(`- Markers: ${markerCount}, Points: ${pointCount}, Lines: ${lineCount}, Polygons: ${polygonCount}`);
-  console.log("- selectedFeatures:", selectedFeatures);
+  const uniquePoints = [];
+  const seenPointKeys = new Set();
+  rawPoints.forEach(p => {
+    try {
+      const latlng = p.getLatLng();
+      const props = p.markerData?.rowData || {};
+      const key = `${latlng.lat.toFixed(6)}|${latlng.lng.toFixed(6)}|${JSON.stringify(props)}`;
+      if (!seenPointKeys.has(key)) {
+        uniquePoints.push(p);
+        seenPointKeys.add(key);
+      }
+    } catch (e) { uniquePoints.push(p); }
+  });
 
-  // Create or get the selection panel container
+  // 2. Deduplicate Lines and Polygons (using feature object references)
+  const uniqueLines = [];
+  const seenLines = new Set();
+  (selectedFeatures.lines || []).forEach(f => {
+    if (f.feature && !seenLines.has(f.feature)) {
+      uniqueLines.push(f);
+      seenLines.add(f.feature);
+    }
+  });
+
+  const uniquePolygons = [];
+  const seenPolygons = new Set();
+  (selectedFeatures.polygons || []).forEach(f => {
+    if (f.feature && !seenPolygons.has(f.feature)) {
+      uniquePolygons.push(f);
+      seenPolygons.add(f.feature);
+    }
+  });
+
+  const pointCount = uniquePoints.length;
+  const lineCount = uniqueLines.length;
+  const polygonCount = uniquePolygons.length;
+  const totalCount = pointCount + lineCount + polygonCount;
+
+  console.log("📊 displaySelectedMarkersPanel (unique) called:", { pointCount, lineCount, polygonCount });
+
+  // 3. UI Construction
   let panelContainer = document.getElementById("selectedMarkersPanel");
   if (!panelContainer) {
     panelContainer = document.createElement("div");
@@ -1053,98 +1056,16 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer, selectedFeatur
             transition: box-shadow 0.3s ease;
         `;
     document.body.appendChild(panelContainer);
-
-    // Add animation style
-    if (!document.getElementById("panelAnimation")) {
-      const style = document.createElement("style");
-      style.id = "panelAnimation";
-      style.innerHTML = `
-                @keyframes slideIn {
-                    from {
-                        transform: translateX(120px) scale(0.92);
-                        opacity: 0;
-                    }
-                    60% {
-                        transform: translateX(-8px) scale(1.02);
-                        opacity: 1;
-                    }
-                    to {
-                        transform: translateX(0) scale(1);
-                        opacity: 1;
-                    }
-                }
-            `;
-      document.head.appendChild(style);
-    }
   }
 
-  // Add Resize Handles
-  const resizeHandleTop = document.createElement("div");
-  resizeHandleTop.style.cssText = "position:absolute; top:0; left:0; width:100%; height:5px; cursor:ns-resize; z-index:1001;";
-  const resizeHandleLeft = document.createElement("div");
-  resizeHandleLeft.style.cssText = "position:absolute; top:0; left:0; width:5px; height:100%; cursor:ew-resize; z-index:1001;";
-  const resizeHandleTopLeft = document.createElement("div");
-  resizeHandleTopLeft.style.cssText = "position:absolute; top:0; left:0; width:10px; height:10px; cursor:nwse-resize; z-index:1002;";
+  // Determine initial active tab
+  const activeTab = pointCount > 0 ? 'points' : (lineCount > 0 ? 'lines' : (polygonCount > 0 ? 'polygons' : 'none'));
 
-  panelContainer.appendChild(resizeHandleTop);
-  panelContainer.appendChild(resizeHandleLeft);
-  panelContainer.appendChild(resizeHandleTopLeft);
-
-  let isResizing = false;
-  let currentHandle = null;
-
-  const startResize = (e, handle) => {
-    isResizing = true;
-    currentHandle = handle;
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = handle.style.cursor;
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startWidth = panelContainer.offsetWidth;
-    const startHeight = panelContainer.offsetHeight;
-
-    const onMouseMove = (moveEvent) => {
-      if (!isResizing) return;
-
-      if (currentHandle === resizeHandleLeft || currentHandle === resizeHandleTopLeft) {
-        const newWidth = startWidth + (startX - moveEvent.clientX);
-        if (newWidth > 300) panelContainer.style.width = newWidth + "px";
-      }
-      if (currentHandle === resizeHandleTop || currentHandle === resizeHandleTopLeft) {
-        const newHeight = startHeight + (startY - moveEvent.clientY);
-        if (newHeight > 100) {
-          panelContainer.style.height = newHeight + "px";
-          const body = document.getElementById("selectionPanelBody");
-          if (body && body.style.display !== "none") {
-            body.style.maxHeight = (newHeight - 70) + "px";
-          }
-        }
-      }
-    };
-
-    const onMouseUp = () => {
-      isResizing = false;
-      document.body.style.userSelect = "auto";
-      document.body.style.cursor = "default";
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
-
-  resizeHandleTop.addEventListener("mousedown", (e) => startResize(e, resizeHandleTop));
-  resizeHandleLeft.addEventListener("mousedown", (e) => startResize(e, resizeHandleLeft));
-  resizeHandleTopLeft.addEventListener("mousedown", (e) => startResize(e, resizeHandleTopLeft));
-
-  // Build tabs for each geometry type
   const tabsHTML = `
     <div style="display: flex; border-bottom: 1px solid #e0e0e0; background: #f5f5f5;">
-      ${(markerCount + pointCount) > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('points')" style="flex: 1; padding: 10px; border: none; background: white; border-bottom: 2px solid #667eea; cursor: pointer; font-weight: 600; font-size: 12px;">📍 Points (${markerCount + pointCount})</button>` : ''}
-      ${lineCount > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('lines')" style="flex: 1; padding: 10px; border: none; background: #f5f5f5; border-bottom: none; cursor: pointer; font-weight: 600; font-size: 12px;">📏 Lines (${lineCount})</button>` : ''}
-      ${polygonCount > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('polygons')" style="flex: 1; padding: 10px; border: none; background: #f5f5f5; border-bottom: none; cursor: pointer; font-weight: 600; font-size: 12px;">⬠ Polygons (${polygonCount})</button>` : ''}
+      ${pointCount > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('points', this)" style="flex: 1; padding: 10px; border: none; background: ${activeTab === 'points' ? 'white' : '#f5f5f5'}; border-bottom: ${activeTab === 'points' ? '2px solid #667eea' : 'none'}; cursor: pointer; font-weight: 600; font-size: 12px;">📍 Points (${pointCount})</button>` : ''}
+      ${lineCount > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('lines', this)" style="flex: 1; padding: 10px; border: none; background: ${activeTab === 'lines' ? 'white' : '#f5f5f5'}; border-bottom: ${activeTab === 'lines' ? '2px solid #667eea' : 'none'}; cursor: pointer; font-weight: 600; font-size: 12px;">📏 Lines (${lineCount})</button>` : ''}
+      ${polygonCount > 0 ? `<button class="tab-btn" onclick="switchSelectionTab('polygons', this)" style="flex: 1; padding: 10px; border: none; background: ${activeTab === 'polygons' ? 'white' : '#f5f5f5'}; border-bottom: ${activeTab === 'polygons' ? '2px solid #667eea' : 'none'}; cursor: pointer; font-weight: 600; font-size: 12px;">⬠ Polygons (${polygonCount})</button>` : ''}
     </div>
   `;
 
@@ -1155,76 +1076,38 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer, selectedFeatur
                 <div style="font-size: 24px; font-weight: 900; margin-top: 2px;">${totalCount}</div>
             </div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+             
                 <button title="Copy coordinates" onclick="copySelectedCoordinates()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📋 Copy</button>
-                <button title="Export as CSV" onclick="exportToCSV()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 CSV</button>
                 <button title="Export as Excel" onclick="exportToExcel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📊 Excel</button>
                 <button title="Export as GeoJSON" onclick="exportToGeoJSON()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">🌍 GeoJSON</button>
                 <button title="Export as KML" onclick="exportToKML()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📍 KML</button>
-                <button title="Export as SHP" onclick="exportToShp()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s;">📦 SHP</button>
+                <button title="Copy coordinates" onclick="copySelectedCoordinates()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">📋 Copy</button>
+                <button title="Export as CSV" onclick="exportToCSV()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">📊 CSV</button>
+                <button title="Export as SHP" onclick="exportToShp()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">📦 SHP</button>
                 <button title="Minimize/Maximize" id="btnMinimizeSelection" onclick="toggleMinimizeSelection()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">−</button>
                 <button title="Close panel" onclick="closeSelectedPanel()" style="padding: 4px 8px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s;">✕</button>
+               
             </div>
         </div>
-        ${((markerCount + pointCount) > 0 || lineCount > 0 || polygonCount > 0) ? tabsHTML : ''}
+        ${totalCount > 0 ? tabsHTML : ''}
         <div id="selectionPanelBody" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; max-height: 60vh;">
     `;
 
-  // Combine markers and point features, then deduplicate
-  const rawPoints = selectedMarkersArray.concat(selectedFeatures.points.map(p => ({
-    getLatLng: () => {
-      const coords = p.feature.geometry.coordinates;
-      return { lat: coords[1], lng: coords[0] };
-    },
-    markerData: { rowData: p.feature.properties || {} },
-    isPointFeature: true
-  })));
-
-  // Deduplicate points based on coordinates and properties string
-  const uniquePoints = [];
-  const seenPointKeys = new Set();
-
-  rawPoints.forEach(p => {
-    try {
-      const latlng = p.getLatLng();
-      const props = p.markerData?.rowData || {};
-      const key = `${latlng.lat.toFixed(6)}|${latlng.lng.toFixed(6)}|${JSON.stringify(props)}`;
-
-      if (!seenPointKeys.has(key)) {
-        uniquePoints.push(p);
-        seenPointKeys.add(key);
-      }
-    } catch (e) {
-      uniquePoints.push(p); // Fallback if key generation fails
-    }
-  });
-
-  // Build table for points
   let pointsTableHTML = buildAttributeTable(uniquePoints, 'Points', totalCount);
-
-  // Build table for lines
-  let linesTableHTML = buildAttributeTable(selectedFeatures.lines, 'Lines', totalCount, 'line');
-
-  // Build table for polygons
-  let polygonsTableHTML = buildAttributeTable(selectedFeatures.polygons, 'Polygons', totalCount, 'polygon');
+  let linesTableHTML = buildAttributeTable(uniqueLines, 'Lines', totalCount, 'line');
+  let polygonsTableHTML = buildAttributeTable(uniquePolygons, 'Polygons', totalCount, 'polygon');
 
   const tablesHTML = `
-    ${(markerCount + pointCount) > 0 ? `<div id="tab-points" class="selection-tab" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
-      ${pointsTableHTML}
-    </div>` : ''}
-    ${lineCount > 0 ? `<div id="tab-lines" class="selection-tab" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
-      ${linesTableHTML}
-    </div>` : ''}
-    ${polygonCount > 0 ? `<div id="tab-polygons" class="selection-tab" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
-      ${polygonsTableHTML}
-    </div>` : ''}
+    ${pointCount > 0 ? `<div id="tab-points" class="selection-tab" style="display: ${activeTab === 'points' ? 'flex' : 'none'}; flex-direction: column; flex: 1; overflow: hidden;">${pointsTableHTML}</div>` : ''}
+    ${lineCount > 0 ? `<div id="tab-lines" class="selection-tab" style="display: ${activeTab === 'lines' ? 'flex' : 'none'}; flex-direction: column; flex: 1; overflow: hidden;">${linesTableHTML}</div>` : ''}
+    ${polygonCount > 0 ? `<div id="tab-polygons" class="selection-tab" style="display: ${activeTab === 'polygons' ? 'flex' : 'none'}; flex-direction: column; flex: 1; overflow: hidden;">${polygonsTableHTML}</div>` : ''}
   `;
 
-  // Add footer with summary
   const footerHTML = `
     <div style="background: #f0f0f0; padding: 10px 16px; border-top: 1px solid #ddd; font-size: 11px; color: #666;">
         <div style="display: flex; justify-content: space-between;">
-            <span><strong>Total Selected:</strong> ${markerCount} points, ${lineCount} lines, ${polygonCount} polygons</span>
-            <span><strong>Action:</strong> Click row to zoom to feature</span>
+            <span><strong>Total Unique Selected:</strong> ${pointCount} points, ${lineCount} lines, ${polygonCount} polygons</span>
+            <span><strong>Action:</strong> Click row to zoom</span>
         </div>
     </div>
   `;
@@ -1316,7 +1199,7 @@ function buildAttributeTable(data, type, totalCount, featureType = 'point') {
   return tableHTML;
 }
 
-function switchSelectionTab(tabName) {
+function switchSelectionTab(tabName, element) {
   // Hide all tabs
   document.querySelectorAll('.selection-tab').forEach(tab => {
     tab.style.display = 'none';
@@ -1329,12 +1212,17 @@ function switchSelectionTab(tabName) {
   }
 
   // Update button styles
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  const buttons = document.querySelectorAll('#selectedMarkersPanel .tab-btn');
+  buttons.forEach(btn => {
     btn.style.background = '#f5f5f5';
     btn.style.borderBottom = 'none';
   });
-  event.target.style.background = 'white';
-  event.target.style.borderBottom = '2px solid #667eea';
+
+  const activeBtn = element || Array.from(buttons).find(b => b.textContent.includes(tabName.charAt(0).toUpperCase() + tabName.slice(1)));
+  if (activeBtn) {
+    activeBtn.style.background = 'white';
+    activeBtn.style.borderBottom = '2px solid #667eea';
+  }
 }
 
 function toggleMinimizeSelection() {
@@ -1628,7 +1516,7 @@ function collectAllMapFeatures(dataSource) {
       if (geoms.length === 0) return;
 
       const types = new Set(geoms.map(g => g.type));
-      
+
       // If all sub-geometries are of types that can be combined (e.g. all Polygons/MultiPolygons)
       const isAllPolygons = Array.from(types).every(t => t === 'Polygon' || t === 'MultiPolygon');
       const isAllLines = Array.from(types).every(t => t === 'LineString' || t === 'MultiLineString');
@@ -2415,8 +2303,8 @@ function updateMapStats() {
       // Avoid double counting markers already in markers array
       if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
         if (!markers.includes(layer)) {
-           // This might be a marker from importedLayers that isn't in markers array
-           // totalPoints++; // Optional: Decide if these should be in "Total Locations"
+          // This might be a marker from importedLayers that isn't in markers array
+          // totalPoints++; // Optional: Decide if these should be in "Total Locations"
         }
       } else if (layer instanceof L.Rectangle) {
         rectCount++;
@@ -3963,8 +3851,18 @@ function handleMapExcelCSVExport(exportMarkers, format) {
 }
 
 // Expose GIS export functions to window
-window.exportToShp = exportToShp;
+
+// Expose selection functions to window
+window.switchSelectionTab = switchSelectionTab;
+window.toggleMinimizeSelection = toggleMinimizeSelection;
+window.closeSelectedPanel = closeSelectedPanel;
+window.zoomToMarker = zoomToMarker;
+window.copySelectedCoordinates = copySelectedCoordinates;
+window.exportToCSV = exportToCSV;
+window.exportToExcel = exportToExcel;
+window.exportToGeoJSON = exportToGeoJSON;
 window.exportToKML = exportToKML;
 window.exportToKMZ = exportToKMZ;
-window.exportToGeoJSON = exportToGeoJSON;
+window.exportToShp = exportToShp;
 window.exportToJSON = exportToJSON;
+window.displaySelectedMarkersPanel = displaySelectedMarkersPanel;

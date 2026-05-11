@@ -342,3 +342,55 @@ function refreshPage() {
 }
 window.refreshPage = refreshPage;
 
+function showToast(message, type = "info") {
+  // Create toast notification
+  const toast = document.createElement("div");
+  toast.className = "toast-notification";
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    max-width: 400px;
+    padding: 16px 20px;
+    background: ${type === "success" ? "#4caf50" : type === "error" ? "#f44336" : type === "warning" ? "#ff9800" : "#2196f3"};
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    animation: slideInLeft 0.3s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-left: 5px solid rgba(0,0,0,0.2);
+  `;
+
+  const icon = document.createElement("span");
+  icon.innerHTML = type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️";
+  icon.style.fontSize = "18px";
+
+  const text = document.createElement("span");
+  text.innerText = message;
+
+  toast.appendChild(icon);
+  toast.appendChild(text);
+  document.body.appendChild(toast);
+
+  // Auto remove after 4 seconds
+  setTimeout(() => {
+    toast.style.animation = "slideOutLeft 0.3s ease-out forwards";
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 300);
+  }, 4000);
+}
+
+// Global Exports
+window.showToast = showToast;
+window.parseDMS = parseDMS;
+window.formatDMS = formatDMS;
+window.isDMS = isDMS;
+window.extractCoordinates = extractCoordinates;
+window.pairCoordinates = pairCoordinates;
