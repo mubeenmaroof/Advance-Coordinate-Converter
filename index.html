@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Coordinate Conversion Tool</title>
+    <meta name="description" content="Advanced GIS Coordinate Conversion Tool — convert, map and process Shapefiles, GeoJSON, KML, GPX, CSV and Excel with zero-latency Web Worker processing.">
+    <title>GIS Converter Hub - Advanced Spatial Tool</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
@@ -12,15 +13,18 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <link rel="icon" type="image/png" href="Tabicon.png">
+    <link rel="stylesheet" href="src/styles.css">
 </head>
 
 <body>
+    <!-- Toast Messages -->
+    <div id="toastContainer" class="toast-container"></div>
+
     <!-- Processing Overlay -->
-    <div id="processingOverlay" class="processing-overlay">
+    <div id="processingOverlay" class="processing-overlay" style="display:none;">
         <div class="processing-content">
             <div class="loader"></div>
             <h3 id="processingStatus">Processing Data...</h3>
-            <p>Please wait, handling large dataset</p>
             <div class="progress-container">
                 <div class="progress-bar-container">
                     <div id="processingProgressBar" class="progress-bar"></div>
@@ -30,857 +34,704 @@
         </div>
     </div>
 
-    <div class="container">
-        <div class="header">
-            <div class="header-left">
-                <h1>🌍 Advanced Coordinate Converter</h1>
-                <p>Professional coordinate conversion with mapping & data processing</p>
-            </div>
-            <div class="header-right">
-                <button class="theme-toggle" onclick="refreshPage()" title="Refresh Entire Project"><span class="refresh-icon">🔄</span> Refresh</button>
-                <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
-            </div>
+    <!-- Header Navigation -->
+    <header>
+        <div class="logo-section">
+            <div class="logo-icon">🌍</div>
+            <h1>GIS <span>Advance Coordinate Converter</span></h1>
         </div>
+        <nav class="nav-links">
+            <button class="nav-btn" onclick="openModal('singleBatchModal'); showManualTab('singleTab');">Single Coordinate</button>
+            <button class="nav-btn" onclick="openModal('singleBatchModal'); showManualTab('batchTab');">Batch Coordinates</button>
+            <button class="nav-btn" onclick="openModal('processingModal')">Data Processing</button>
+            <button class="nav-btn" onclick="openModal('presetsModal')">Presets</button>
+            <button class="nav-btn" onclick="openModal('aboutModal')">About Us</button>
+        </nav>
+        <div class="header-controls">
+            <button class="theme-toggle-btn" onclick="refreshPage()" title="Refresh Entire Project">🔄</button>
+            <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleThemeDashboard()">🌙</button>
+        </div>
+    </header>
 
-        <div class="content">
-            <div class="tab-buttons">
-                <button class="tab-btn active" onclick="showTab('single')">Single Conversion</button>
-                <button class="tab-btn" onclick="showTab('batch')">Batch Conversion</button>
-                <button class="tab-btn" onclick="showTab('excel')">File Upload</button>
-                <button class="tab-btn" onclick="showTab('map')">🗺️ Map View</button>
-                <button class="tab-btn" onclick="showTab('processing')">📊 Data Processing</button>
-                <button class="tab-btn" onclick="showTab('history')">📜 History</button>
-                <button class="tab-btn" onclick="showTab('presets')">⚙️ Presets</button>
-                <button class="tab-btn" onclick="showTab('about')">ℹ️ About</button>
+    <!-- Dashboard Main Area -->
+    <div class="dashboard-container">
+        <!-- ========== SIDEBAR ========== -->
+        <aside class="sidebar">
+            <h2>GIS File Upload</h2>
+
+            <!-- Search + Upload row -->
+            <div class="search-upload-row">
+                <div class="search-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" id="sidebarSearchInput" placeholder="Search formats…">
+                </div>
+                <button class="btn-upload-file" id="btnSidebarUpload">Upload File</button>
             </div>
 
-            <!-- Single Conversion Tab -->
-            <div id="single" class="tab-content active">
-                <div class="format-example">
-                    <h4>📝 Supported Formats:</h4>
-                    <p><strong>Coordinate Pairs:</strong></p>
-                    <p>• DMS: <code>29°24'28.70"N, 71°30'15.50"W</code></p>
-                    <p>• DD: <code>29.407972, -71.504306</code></p>
-                    <p><strong>Single Coordinates:</strong></p>
-                    <p>• <code>29°24'28.70"N</code> or <code>29.407972</code></p>
-                </div>
-
-                <div class="input-group">
-                    <label>Input Coordinate:</label>
-                    <input type="text" id="singleInput" placeholder='e.g., 29°24\' 28.70"N, 71°30\'15.50"W or 29.407972,
-                        -71.504306'>
-                </div>
-
-                <div class="grid-2">
-                    <div class="input-group">
-                        <label>Convert To:</label>
-                        <select id="conversionType">
-                            <option value="auto">Auto Detect & Convert</option>
-                            <option value="dd">To Decimal Degrees (DD)</option>
-                            <option value="dms">To DMS</option>
-                        </select>
+            <!-- File-type cards -->
+            <div class="file-list" id="sidebarFileList">
+                <!-- 1. Shapefile -->
+                <div class="file-card shp-card" id="cardShp" title="Drag & drop or click to upload Shapefile">
+                    <div class="file-card-left">
+                        <div class="file-icon-box">📦</div>
+                        <div class="file-details">
+                            <h3>1. Shapefile</h3>
+                            <p>(.shp, .dbf, .shx, .prj)</p>
+                        </div>
                     </div>
+                    <button class="btn-browse" onclick="event.stopPropagation(); document.getElementById('shpFile').click();">browse</button>
+                </div>
 
-                    <div class="input-group">
-                        <label>Precision (decimal places): <span id="precisionValue">6</span></label>
-                        <input type="range" class="precision-slider" id="precisionSlider" min="2" max="10" value="6"
-                            oninput="updatePrecision(this.value)">
+                <!-- 2. GeoJSON -->
+                <div class="file-card geojson-card" id="cardGeojson" title="Drag & drop or click to upload GeoJSON">
+                    <div class="file-card-left">
+                        <div class="file-icon-box">🗺️</div>
+                        <div class="file-details">
+                            <h3>2. GeoJSON</h3>
+                            <p>(.geojson, .json)</p>
+                        </div>
                     </div>
+                    <button class="btn-browse" onclick="event.stopPropagation(); document.getElementById('geoJsonFile').click();">browse</button>
                 </div>
 
-                <div class="button-group">
-                    <button class="btn" onclick="convertSingle()">Convert</button>
-                    <button class="btn btn-secondary" onclick="showOnMap()">Show on Map</button>
+                <!-- 3. KML/KMZ -->
+                <div class="file-card kml-card" id="cardKml" title="Drag & drop or click to upload KML/KMZ">
+                    <div class="file-card-left">
+                        <div class="file-icon-box">📂</div>
+                        <div class="file-details">
+                            <h3>3. KML/KMZ</h3>
+                            <p>(.kml, .kmz)</p>
+                        </div>
+                    </div>
+                    <button class="btn-browse" onclick="event.stopPropagation(); document.getElementById('kmlFile').click();">browse</button>
                 </div>
 
-                <div id="singleResult"></div>
+                <!-- 4. GPX -->
+                <div class="file-card gpx-card" id="cardGpx" title="Drag & drop or click to upload GPX">
+                    <div class="file-card-left">
+                        <div class="file-icon-box">🛰️</div>
+                        <div class="file-details">
+                            <h3>4. GPX Track</h3>
+                            <p>(.gpx)</p>
+                        </div>
+                    </div>
+                    <button class="btn-browse" onclick="event.stopPropagation(); document.getElementById('gpxFile').click();">browse</button>
+                </div>
+
+                <!-- 5. CSV/Excel -->
+                <div class="file-card csv-card" id="cardCsv" title="Drag & drop or click to upload CSV/Excel">
+                    <div class="file-card-left">
+                        <div class="file-icon-box">📝</div>
+                        <div class="file-details">
+                            <h3>5. CSV / Excel</h3>
+                            <p>(.csv, .xlsx, .xls)</p>
+                        </div>
+                    </div>
+                    <button class="btn-browse" onclick="event.stopPropagation(); document.getElementById('excelFile').click();">browse</button>
+                </div>
             </div>
 
-            <!-- Batch Conversion Tab -->
-            <div id="batch" class="tab-content">
-                <div class="format-example">
-                    <h4>📝 Enter one coordinate per line:</h4>
-                    <p><strong>Coordinate Pairs:</strong></p>
-                    <p>• DMS: <code>29°24'28.70"N, 71°30'15.50"W</code></p>
-                    <p>• DD: <code>29.407972, -71.504306</code></p>
-                    <p><strong>Single Coordinates:</strong></p>
-                    <p>• <code>29°24'28.70"N</code> or <code>29.407972</code></p>
+            <!-- Upload Queue -->
+            <div class="queue-section">
+                <div class="queue-title">
+                    <h3>Upload Queue</h3>
+                    <span id="queueCount" style="font-size:11px;color:#94a3b8;font-weight:600;"></span>
+                </div>
+                <div class="queue-list" id="queueList">
+                    <p style="font-size:12px;color:#94a3b8;text-align:center;margin:10px 0;">No active uploads</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ========== MAIN CONTENT ========== -->
+        <main class="main-content">
+
+            <!-- Map View Card -->
+            <div class="map-view-card">
+                <h2>🗺️ Map View</h2>
+
+                <!-- Map container -->
+                <div class="map-outer-container">
+                    <div id="mapContainer"></div>
+                    <div class="map-layer-picker" id="mapLayerPicker">
+                        <button id="mapLayerToggle" class="map-layer-btn map-layer-trigger" onclick="toggleMapLayerMenu()" title="Toggle map layers">
+                            <span id="mapLayerToggleIcon">🌐</span>
+                            <span id="mapLayerToggleLabel">Street Map</span>
+                        </button>
+                        <div class="map-layer-menu" id="mapLayerMenu">
+                            <button class="map-layer-btn active" data-layer="openstreetmap" onclick="selectMapLayer('openstreetmap')" title="Street Map">
+                                <span class="layer-icon">🌐</span>
+                                <span class="layer-label">Street Map</span>
+                            </button>
+                            <button class="map-layer-btn" data-layer="google" onclick="selectMapLayer('google')" title="Google Maps">
+                                <span class="layer-icon">🌍</span>
+                                <span class="layer-label">Google Maps</span>
+                            </button>
+                            <button class="map-layer-btn" data-layer="satellite" onclick="selectMapLayer('satellite')" title="Satellite">
+                                <span class="layer-icon">🛰️</span>
+                                <span class="layer-label">Satellite</span>
+                            </button>
+                            <button class="map-layer-btn" data-layer="terrain" onclick="selectMapLayer('terrain')" title="Terrain">
+                                <span class="layer-icon">⛰️</span>
+                                <span class="layer-label">Terrain</span>
+                            </button>
+                            <button class="map-layer-btn" data-layer="esri" onclick="selectMapLayer('esri')" title="ESRI Terrain">
+                                <span class="layer-icon">🏞️</span>
+                                <span class="layer-label">ESRI Terrain</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="input-group">
-                    <label>Input Coordinates (one per line):</label>
-                    <textarea id="batchInput" placeholder="Enter coordinates, one per line"></textarea>
-                </div>
+            </div>
 
-                <div class="input-group">
-                    <label>Convert To:</label>
-                    <select id="batchConversionType">
-                        <option value="auto">Auto Detect & Convert</option>
-                        <option value="dd">To Decimal Degrees (DD)</option>
-                        <option value="dms">To DMS</option>
+            <!-- Conversion Settings Bar -->
+            <div class="conversion-settings-card">
+                <div class="settings-group">
+                    <label for="targetFormatSelect">Target Format</label>
+                    <select id="targetFormatSelect" class="settings-select">
+                        <option value="csv" selected>CSV Data File</option>
+                        <option value="geojson">GeoJSON Format</option>
+                        <option value="kml">KML Map Overlay</option>
+                        <option value="kmz">KMZ (Zipped KML)</option>
+                        <option value="shp">Shapefile (SHP)</option>
+                        <option value="gpx">GPX Waypoints</option>
+                        <option value="xlsx">Excel Workbook</option>
+                        <option value="json">JSON Structure</option>
                     </select>
                 </div>
 
-                <div class="button-group">
-                    <button class="btn" onclick="convertBatch()">Convert All</button>
-                    <button class="btn btn-secondary" onclick="copyResults()">Copy Results</button>
-                    <button class="btn btn-secondary" onclick="downloadCSV()">Download CSV</button>
-                    <button class="btn btn-success" onclick="showBatchOnMap()">Show All on Map</button>
-                </div>
-
-                <div id="batchResult"></div>
-            </div>
-
-            <!-- File Upload Tab -->
-            <div id="excel" class="tab-content">
-                <div
-                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(45%, 1fr)); gap: 25px; align-items: start;">
-
-                    <!-- Excel/CSV Upload -->
-                    <div id="excelCard" class="upload-section-card"
-                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="dropZone"
-                            onclick="document.getElementById('excelFile').click()">
-                            <h3>📤 Drag & Drop Excel/CSV File</h3>
-                            <p>Or click to browse</p>
-                            <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none"
-                                onchange="handleFileUpload(event)">
-                        </div>
-                        <div class="button-group" style="margin-top: 15px; display: none;" id="excelClearBtnGroup">
-                            <button class="btn btn-secondary" onclick="clearExcelData()">Clear</button>
-                        </div>
-                        <div id="columnSelection"></div>
-                        <div id="excelResult"></div>
-                    </div>
-
-                    <!-- GeoJSON/JSON Upload -->
-                    <div id="geoJsonCard" class="upload-section-card"
-                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="geoJsonDropZone"
-                            onclick="document.getElementById('geoJsonFile').click()">
-                            <h3>🗺️ Drag & Drop GeoJSON/JSON File</h3>
-                            <p>Or click to browse</p>
-                            <input type="file" id="geoJsonFile" accept=".geojson,.json" style="display:none"
-                                onchange="handleGeoJsonUpload(event)">
-                        </div>
-                        <div class="button-group" style="margin-top: 15px; display: none;" id="geoJsonClearBtnGroup">
-                            <button class="btn btn-secondary" onclick="clearGeoJsonData()">Clear</button>
-                        </div>
-                        <div id="geoJsonResult"></div>
-                    </div>
-
-                    <!-- KMZ/KML Upload -->
-                    <div id="kmlCard" class="upload-section-card"
-                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="kmlDropZone"
-                            onclick="document.getElementById('kmlFile').click()">
-                            <h3>📂 Drag & Drop KMZ/KML File</h3>
-                            <p>Or click to browse</p>
-                            <input type="file" id="kmlFile" accept=".kml,.kmz" style="display:none"
-                                onchange="handleKmlUpload(event)">
-                        </div>
-                        <div class="button-group" style="margin-top: 15px; display: none;" id="kmlClearBtnGroup">
-                            <button class="btn btn-secondary" onclick="clearKmlData()">Clear</button>
-                        </div>
-                        <div id="kmlResult"></div>
-                    </div>
-
-                    <!-- Shapefile Upload -->
-                    <div id="shpCard" class="upload-section-card"
-                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="shpDropZone"
-                            onclick="document.getElementById('shpFile').click()">
-                            <h3>📦 Drag & Drop Shapefile Components</h3>
-                            <p>Select shapefile sets: <strong>.shp, .dbf, .shx, .prj</strong> (multiple supported)</p>
-                            <input type="file" id="shpFile" accept=".shp,.dbf,.shx,.prj" style="display:none" multiple
-                                onchange="handleShpUpload(event)">
-                        </div>
-                        <div class="button-group" style="margin-top: 15px; display: none;" id="shpTopClearBtnGroup">
-                            <button class="btn btn-secondary" onclick="clearShpData()">Clear</button>
-                        </div>
-                        <div id="shpResult"></div>
-                        <div class="button-group" style="margin-top: 15px; display: none;" id="shpBottomActionBtnGroup">
-                            <div
-                                style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #28a745; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: center;">
-                                <label style="font-weight: 700; font-size: 0.9em; color: #28a745;">Export
-                                    Format:</label>
-                                <div id="shpExportFormatPlaceholder"></div>
-                                <div style="display: flex; gap: 10px;">
-                                    <button class="btn" onclick="downloadShpResults()"
-                                        style="background: #28a745; color: white; border: none; padding: 10px 20px; font-weight: 700;">📥
-                                        Download Results</button>
-                                    <button class="btn btn-success" onclick="showShpOnMap()"
-                                        style="padding: 10px 20px; font-weight: 700;">🗺️ Show on Map</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- GPX Upload -->
-                    <div id="gpxCard" class="upload-section-card"
-                        style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                        <div class="drag-drop-zone" id="gpxDropZone"
-                            onclick="document.getElementById('gpxFile').click()">
-                            <h3>🛰️ Drag & Drop GPX File</h3>
-                            <p>Waypoints, Tracks & Routes</p>
-                            <input type="file" id="gpxFile" accept=".gpx" style="display:none"
-                                onchange="handleGpxUpload(event)">
-                        </div>
-                        <div class="button-group" style="margin-top: 15px; display: none;" id="gpxClearBtnGroup">
-                            <button class="btn btn-secondary" onclick="clearGpxData()">Clear</button>
-                        </div>
-                        <div id="gpxResult"></div>
-                    </div>
-
-
-                </div>
-            </div>
-
-            <!-- Map View Tab -->
-            <div id="map" class="tab-content">
-
-
-                <div class="filter-controls" style="margin-bottom: 10px;">
-                    <h4 style="margin-bottom: 15px;">🚀 Advanced GIS Tools</h4>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
-                        <button class="btn btn-secondary" id="btnToggleCluster" onclick="toggleClustering()">Enable
-                            Clustering</button>
-                        <button class="btn btn-secondary" id="btnToggleHeatmap" onclick="toggleHeatmap()">Show
-                            Heatmap</button>
-                        <!-- Buffer radius input (hidden) for the script to use -->
-                        <input type="hidden" id="bufferRadius" value="1000">
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                        <button class="btn btn-success" onclick="exportToGeoJSON()">Export GeoJSON</button>
-                        <button class="btn btn-success" onclick="exportToJSON()">Export JSON</button>
-                        <button class="btn btn-success" onclick="exportToKML()">Export KML</button>
-                        <button class="btn btn-success" onclick="exportToKMZ()">Export KMZ</button>
-                        <button class="btn btn-success" onclick="exportToShp()">Export SHP</button>
-                        <button class="btn btn-success" onclick="exportToExcel()">Export Excel</button>
-                        <button class="btn btn-success" onclick="exportToCSV()">Export CSV</button>
-                        <div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
-                            <label for="pdfResolution" style="font-size: 0.9em; font-weight: 600;">Def:</label>
-                            <select id="pdfResolution"
-                                style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
-                                <option value="1">Standard (1x)</option>
-                                <option value="2">High (2x)</option>
-                                <option value="3" selected>Ultra High (3x)</option>
-                                <option value="4">Print Quality (4x)</option>
-                            </select>
-                            <button class="btn btn-success" onclick="exportMapToPDF()">Export Map as PDF</button>
-                        </div>
+                <div class="settings-group">
+                    <label>CRS Conversion</label>
+                    <div class="crs-container">
+                        <input type="text" id="crsSource" class="settings-input" value="EPSG:4326"
+                            title="Source Coordinate Reference System">
+                        <span class="crs-divider">to</span>
+                        <input type="text" id="crsTarget" class="settings-input" value="EPSG:3857"
+                            title="Target Coordinate Reference System">
                     </div>
                 </div>
 
-                <hr style="margin: 10px 0; border: none; border-top: 2px solid #ddd;">
-
-                <div class="filter-controls" style="margin-bottom: 20px;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="margin: 0;">🎨 Marker Style</h4>
-                        <div
-                            style="display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 5px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                            <label style="font-size: 0.9em; font-weight: 600; color: #4a5568;">Size:</label>
-                            <input type="number" id="markerSize" min="20" max="80" value="35"
-                                style="width: 60px; padding: 4px; border-radius: 4px; border: 1px solid #cbd5e0; text-align: center; font-weight: 600; color: #667eea;"
-                                oninput="changeMarkerSize(this.value)">
-                            <span style="font-size: 0.85em; color: #718096; font-weight: 600;">px</span>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px;">
-                        <button class="marker-style-btn active" onclick="changeMarkerStyle('numbered')"
-                            data-style="numbered">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 24px;">🔢</span>
-                                <span>Numbered</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMarkerStyle('pin')" data-style="pin">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 24px;">📍</span>
-                                <span>Pin</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMarkerStyle('location')" data-style="location">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 24px;">📌</span>
-                                <span>Location</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMarkerStyle('star')" data-style="star">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 24px;">⭐</span>
-                                <span>Star</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMarkerStyle('flag')" data-style="flag">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 24px;">🚩</span>
-                                <span>Flag</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMarkerStyle('target')" data-style="target">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 24px;">🎯</span>
-                                <span>Target</span>
-                            </div>
-                        </button>
-
-                    </div>
-                </div>
-
-                <hr style="margin: 10px 0; border: none; border-top: 2px solid #ddd;">
-
-                <div class="filter-controls" style="margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 15px;">🗺️ Map Layers</h4>
-                    <p style="margin: 0 0 15px 0; font-size: 0.95em; color: #666;">Click to switch between different map
-                        views:</p>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px;">
-                        <button class="marker-style-btn active" onclick="changeMapLayer('google')" data-layer="google"
-                            style="border: 2px solid #667eea;">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
-                                <span style="font-size: 24px;">🌍</span>
-                                <span>Google Maps</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn " onclick="changeMapLayer('openstreetmap')"
-                            data-layer="openstreetmap">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
-                                <span style="font-size: 24px;">🌐</span>
-                                <span>Street Map</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMapLayer('satellite')" data-layer="satellite">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
-                                <span style="font-size: 24px;">🛰️</span>
-                                <span>Satellite</span>
-                            </div>
-                        </button>
-                        <button class="marker-style-btn" onclick="changeMapLayer('terrain')" data-layer="terrain">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
-                                <span style="font-size: 24px;">⛰️</span>
-                                <span>Terrain</span>
-                            </div>
-                        </button>
-
-                        <button class="marker-style-btn" onclick="changeMapLayer('esri')" data-layer="esri">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-direction: column;">
-                                <span style="font-size: 24px;">🏞️</span>
-                                <span>ESRI</span>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="mapContainer"
-                    style="height: 800px; border-radius: 10px; background: #f0f0f0; position: relative; overflow: hidden;">
-                </div>
-
-                <!-- Premium Map Statistics Dashboard -->
-                <div id="mapStatsDashboard" class="map-stats-dashboard">
-                    <div class="stat-card">
-                        <div class="stat-icon">📍</div>
-                        <div class="stat-content">
-                            <h3 id="statTotalLocations">0</h3>
-                            <p>Total Locations</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">📐</div>
-                        <div class="stat-content">
-                            <h3 id="statTotalShapes">0</h3>
-                            <p>Drawn Shapes</p>
-                            <div class="stat-sub-counts">
-                                <span title="Polygons">polygon: <b id="countPolygon">0</b></span>
-                                <span title="Rectangles">▭ rect: <b id="countRectangle">0</b></span>
-                                <span title="Circles">◯ circle: <b id="countCircle">0</b></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="stat-card adjustable" title="Click to manually adjust zoom">
-                        <div class="stat-icon">🔭</div>
-                        <div class="stat-content">
-                            <input type="number" id="statZoomLevelInput" value="2" min="1" max="22" step="1"
-                                class="stat-editable-input">
-                            <p>Zoom Level</p>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- Data Processing Tab -->
-            <div id="processing" class="tab-content">
-                <h3 style="font-size: 24px;">📊 Data Processing Tools</h3>
-
-                <hr style="margin: 30px 0; border: none; border-top: 2px solid #ddd;">
-
-                <!-- Duplicate Removal Section -->
-                <div class="filter-controls"
-                    style="margin-bottom: 30px; border: 2px solid #764ba2; border-radius: 10px;">
-                    <div class="tool-info-btn" onclick="toggleToolInfo('dedupeInfoBox')">i</div>
-                    <div id="dedupeInfoBox" class="tool-info-content">
-                        <h5>🗑️ Remove Duplicates</h5>
-                        <p>Removes identical rows based on selected columns to ensure your dataset is clean and unique.
-                        </p>
-                    </div>
-                    <h4 style="color: #764ba2; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 24px;">🗑️</span>
-                        <span>Remove Duplicates Tool</span>
-                    </h4>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Upload Excel/CSV
-                            File:</label>
-                        <input type="file" id="dedupeFile" accept=".xlsx,.xls,.csv"
-                            style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; cursor: pointer;">
-                        <div id="dedupeFileInfo" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
-                    </div>
-
-                    <div id="dedupeColumnSelection" style="margin-top: 20px;"></div>
-
-                    <div class="button-group" style="margin-top: 20px;">
-                        <button class="btn btn-success" onclick="removeDuplicatesFromFile()">🗑️ Remove
-                            Duplicates</button>
-                        <button class="btn btn-secondary" onclick="clearDedupeData()">Clear</button>
-                    </div>
-
-                    <div id="dedupeResult" style="margin-top: 20px;"></div>
-                </div>
-
-                <hr style="margin: 30px 0; border: none; border-top: 2px solid #ddd;">
-
-                <!-- Split Column Section -->
-                <div class="filter-controls"
-                    style="margin-bottom: 30px; border: 2px solid #ff9800; border-radius: 10px;">
-                    <div class="tool-info-btn" onclick="toggleToolInfo('splitInfoBox')">i</div>
-                    <div id="splitInfoBox" class="tool-info-content">
-                        <h5>✂️ Split Column Tool</h5>
-                        <p>Divides a single column into two or more parts using a specified delimiter (comma, space,
-                            etc.), useful for separating coordinates or text.</p>
-                    </div>
-                    <h4 style="color: #ff9800; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 24px;">✂️</span>
-                        <span>Split Column Tool</span>
-                    </h4>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Upload Excel/CSV
-                            File:</label>
-                        <input type="file" id="splitFile" accept=".xlsx,.xls,.csv"
-                            style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; cursor: pointer;">
-                        <div id="splitFileInfo" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
-                    </div>
-
-                    <div id="splitSheetSelection" style="margin-bottom: 20px;"></div>
-                    <div id="splitColumnSelection" style="margin-top: 20px;"></div>
-
-                    <div id="splitDelimiterSelection" style="margin-top: 20px; display: none;">
-                        <label style="font-weight: 600; display: block; margin-bottom: 10px;">Select Delimiter:</label>
-                        <div
-                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">
-                            <label
-                                style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px; background: #f3e5f5; border-radius: 6px; border: 2px solid #9c27b0;">
-                                <input type="radio" name="splitDelimiter" value="all" class="splitDelimiter">
-                                <span style="font-weight: 600; color: #6a1b9a;">✓ All Delimiters</span>
-                            </label>
-                            <label
-                                style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px; background: #f8f9fa; border-radius: 6px; border: 1px solid #ddd;">
-                                <input type="radio" name="splitDelimiter" value="," class="splitDelimiter" checked>
-                                <span>Comma (,)</span>
-                            </label>
-                            <label
-                                style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px; background: #f8f9fa; border-radius: 6px; border: 1px solid #ddd;">
-                                <input type="radio" name="splitDelimiter" value=";" class="splitDelimiter">
-                                <span>Semicolon (;)</span>
-                            </label>
-                            <label
-                                style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px; background: #f8f9fa; border-radius: 6px; border: 1px solid #ddd;">
-                                <input type="radio" name="splitDelimiter" value=":" class="splitDelimiter">
-                                <span>Colon (:)</span>
-                            </label>
-                            <label
-                                style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px; background: #f8f9fa; border-radius: 6px; border: 1px solid #ddd;">
-                                <input type="radio" name="splitDelimiter" value=" " class="splitDelimiter">
-                                <span>Space ( )</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="button-group" style="margin-top: 20px;">
-                        <button class="btn btn-success" onclick="splitColumnData()">✂️ Split Column</button>
-                        <button class="btn btn-secondary" onclick="clearSplitData()">Clear</button>
-                    </div>
-
-                    <div id="splitResult" style="margin-top: 20px;"></div>
-                </div>
-
-                <hr style="margin: 30px 0; border: none; border-top: 2px solid #ddd;">
-
-                <!-- File Comparison Section -->
-                <div class="filter-controls"
-                    style="margin-bottom: 30px; border: 2px solid #667eea; border-radius: 10px;">
-                    <div class="tool-info-btn" onclick="toggleToolInfo('compareInfoBox')">i</div>
-                    <div id="compareInfoBox" class="tool-info-content">
-                        <h5>🔄 File Comparison Tool</h5>
-                        <p>Compares two files to identify records that are matching in both, or unique to
-                            primary/secondary files.</p>
-                    </div>
-                    <h4 style="color: #667eea; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 24px;">🔄</span>
-                        <span>File Comparison Tool</span>
-                    </h4>
-
-                    <div class="grid-2" style="gap: 20px; margin-bottom: 20px;">
-                        <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">File 1
-                                (Primary):</label>
-                            <input type="file" id="comparisonFile1" accept=".xlsx,.xls,.csv"
-                                style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; cursor: pointer;">
-                            <div id="file1Info" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
-                        </div>
-
-                        <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">File 2 (Compare
-                                With):</label>
-                            <input type="file" id="comparisonFile2" accept=".xlsx,.xls,.csv"
-                                style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; cursor: pointer;">
-                            <div id="file2Info" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
-                        </div>
-                    </div>
-
-                    <div id="comparisonColumnSelection" style="margin-top: 20px;"></div>
-
-                    <div class="button-group" style="margin-top: 20px;">
-                        <button class="btn" onclick="compareFiles()">🔍 Compare Files</button>
-                        <button class="btn btn-secondary" onclick="clearComparisonData()">Clear</button>
-                    </div>
-
-                    <div id="comparisonResult" style="margin-top: 20px;"></div>
-                </div>
-
-                <hr style="margin: 30px 0; border: none; border-top: 2px solid #ddd;">
-
-                <!-- Smart File Merger Section -->
-                <div class="filter-controls"
-                    style="margin-bottom: 30px; border: 2px solid #28a745; border-radius: 10px;">
-                    <div class="tool-info-btn" onclick="toggleToolInfo('mergeInfoBox')">i</div>
-                    <div id="mergeInfoBox" class="tool-info-content">
-                        <h5>🔗 Smart File Merger</h5>
-                        <p>Combines two files based on a common 'Key' column, similar to an Excel VLOOKUP or SQL Join.
-                        </p>
-                    </div>
-                    <h4 style="color: #28a745; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 24px;">🔗</span>
-                        <span>Smart File Merger (Join)</span>
-                    </h4>
-
-                    <div class="grid-2" style="gap: 20px; margin-bottom: 20px;">
-                        <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">File 1
-                                (Base/Left):</label>
-                            <input type="file" id="mergeFile1" accept=".xlsx,.xls,.csv"
-                                style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; cursor: pointer;">
-                            <div id="mergeFile1Info" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
-                        </div>
-
-                        <div>
-                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">File 2
-                                (Join/Right):</label>
-                            <input type="file" id="mergeFile2" accept=".xlsx,.xls,.csv"
-                                style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; cursor: pointer;">
-                            <div id="mergeFile2Info" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
-                        </div>
-                    </div>
-
-                    <div id="mergeColumnSelection" style="margin-top: 20px;"></div>
-
-                    <div class="button-group" style="margin-top: 20px;">
-                        <button class="btn btn-success" onclick="mergeFiles()">🔗 Merge Files</button>
-                        <button class="btn btn-secondary" onclick="clearMergeData()">Clear</button>
-                    </div>
-
-                    <div id="mergeResult" style="margin-top: 20px;"></div>
-                </div>
-
-                <hr style="margin: 30px 0; border: none; border-top: 2px solid #ddd;">
-
-                <!-- Coordinate Sanitizer Section -->
-                <div class="filter-controls"
-                    style="margin-bottom: 30px; border: 2px solid #e91e63; border-radius: 10px;">
-                    <div class="tool-info-btn" onclick="toggleToolInfo('sanitizeInfoBox')">i</div>
-                    <div id="sanitizeInfoBox" class="tool-info-content">
-                        <h5>🧹 Coordinate Sanitizer</h5>
-                        <p>Deep cleans coordinate strings by removing alphabetic noise, special characters, and spaces,
-                            keeping only numeric data for conversion.</p>
-                    </div>
-                    <h4 style="color: #e91e63; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 24px;">🧹</span>
-                        <span>Coordinate Sanitizer (Deep Clean: Remove Alphabets & Symbols)</span>
-                    </h4>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">Upload Excel/CSV
-                            File:</label>
-                        <input type="file" id="sanitizeFile" accept=".xlsx,.xls,.csv"
-                            style="padding: 12px; border: 2px solid #ddd; border-radius: 8px; width: 100%; cursor: pointer;">
-                        <div id="sanitizeFileInfo" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
-                    </div>
-
-                    <div id="sanitizeColumnSelection" style="margin-top: 20px;"></div>
-
-                    <div id="sanitizeOptions"
-                        style="margin-top: 20px; background: #fce4ec; border: 1px solid #f8bbd0; padding: 15px; border-radius: 8px;">
-                        <label style="font-weight: 600; margin-bottom: 15px; display: block; color: #c2185b;">Select
-                            Items to Remove:</label>
-                        <div
-                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 15px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="sanitizeOptAll" onchange="toggleAllSanitizeOptions(this)">
-                                <strong>Select All</strong>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" class="sanitize-opt" value="alpha">
-                                <span>Characters (A-Z)</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" class="sanitize-opt" value="spaces">
-                                <span>Spaces</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" class="sanitize-opt" value="symbols">
-                                <span>Symbols</span>
-                            </label>
-                        </div>
-
-                        <div style="height: 1px; background: #f8bbd0; margin: 10px 0;"></div>
-                        <label
-                            style="font-weight: 600; margin-bottom: 10px; display: block; color: #c2185b; font-size: 0.9em;">Specific
-                            Delimiters:</label>
-                        <div
-                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" class="sanitize-opt sanitize-delim-all" id="sanitizeOptAllDelims"
-                                    value="all_delims" onchange="handleAllDelimsChange(this)">
-                                <strong>All Delimiters</strong>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" class="sanitize-opt sanitize-delim-single" value="comma"
-                                    onchange="handleSingleDelimChange()">
-                                <span>Comma (,)</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" class="sanitize-opt sanitize-delim-single" value="semicolon"
-                                    onchange="handleSingleDelimChange()">
-                                <span>Semicolon (;)</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" class="sanitize-opt sanitize-delim-single" value="colon"
-                                    onchange="handleSingleDelimChange()">
-                                <span>Colon (:)</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="button-group" style="margin-top: 20px;">
-                        <button class="btn" style="background: #e91e63; color: white; border: none;"
-                            onclick="sanitizeCoordinates()">🧹 Deep Clean Data</button>
-                        <button class="btn btn-secondary" onclick="clearSanitizeData()">Clear</button>
-                    </div>
-
-                    <div id="sanitizeResult" style="margin-top: 20px;"></div>
-                </div>
-
-                <hr style="margin: 30px 0; border: none; border-top: 2px solid #ddd;">
-
-
-            </div>
-
-            <!-- History Tab -->
-            <div id="history" class="tab-content">
-                <h3>📜 Conversion History</h3>
-                <p style="margin-bottom: 20px;">Click on any item to reuse it</p>
-
-                <button class="btn btn-danger" onclick="clearHistory()">Clear All History</button>
-
-                <div id="historyList" style="margin-top: 20px;"></div>
-            </div>
-
-            <!-- Presets Tab -->
-            <div id="presets" class="tab-content">
-                <h3>⚙️ Saved Presets</h3>
-
-                <div class="input-group">
-                    <label>Preset Name:</label>
-                    <input type="text" id="presetName" placeholder="Enter preset name">
-                </div>
-
-                <div class="input-group">
-                    <label>Conversion Settings:</label>
-                    <select id="presetConversion">
-                        <option value="auto">Auto Detect</option>
-                        <option value="dd">To DD</option>
-                        <option value="dms">To DMS</option>
-                    </select>
-                </div>
-
-                <div class="input-group">
-                    <label>Precision:</label>
-                    <input type="number" id="presetPrecision" min="2" max="10" value="6">
-                </div>
-
-                <div class="grid-2">
-                    <div class="input-group">
-                        <label>Default Map Layer:</label>
-                        <select id="presetMapLayer">
-                            <option value="openstreetmap">Street Map</option>
-                            <option value="google">Google Maps</option>
-                            <option value="satellite">Satellite</option>
-                            <option value="terrain">Terrain</option>
-                            <option value="dark">Dark Mode</option>
-                            <option value="esri">ESRI</option>
+                <div class="conversion-action-row">
+                    <div class="pdf-export-row">
+                        <label for="pdfResolution">PDF Quality</label>
+                        <select id="pdfResolution" class="settings-select pdf-resolution-select">
+                            <option value="1">Standard (1x)</option>
+                            <option value="2">High (2x)</option>
+                            <option value="3" selected>Ultra High (3x)</option>
+                            <option value="4">Print (4x)</option>
                         </select>
+                        <button class="btn-browse" onclick="exportMapToPDF()">📄 Export PDF</button>
                     </div>
-
-                    <div class="input-group">
-                        <label>Default Marker Style:</label>
-                        <select id="presetMarkerStyle">
-                            <option value="numbered">Numbered Circles</option>
-                            <option value="pin">📍 Pin</option>
-                            <option value="location">📌 Location</option>
-                            <option value="star">⭐ Star</option>
-                            <option value="flag">🚩 Flag</option>
-                            <option value="target">🎯 Target</option>
-                            <option value="home">🏠 Home</option>
-                            <option value="building">🏢 Building</option>
-                        </select>
-                    </div>
+                    <button class="btn-convert-download" onclick="triggerConvertAndDownload()">
+                        <span>🔄</span> Convert &amp; Download
+                    </button>
                 </div>
-
-                <div class="input-group">
-                    <label>Default Marker Size (px):</label>
-                    <input type="number" id="presetMarkerSize" min="20" max="80" value="35">
-                    <small style="color: #666;">Recommended: 35px</small>
-                </div>
-
-                <button class="btn" onclick="savePreset()">Save Preset</button>
-
-                <div id="presetsList" style="margin-top: 30px;"></div>
             </div>
+        </main>
+    </div>
 
-            <!-- About Tab -->
-            <div id="about" class="tab-content">
-                <div
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 20px; text-align: center; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
-                    <h1 style="font-size: 2.5em; margin-bottom: 10px;">🌍 Advanced Coordinate Converter</h1>
-                    <p style="font-size: 1.2em; opacity: 0.9;">Professional Grade GIS & Spatial Data Management Tool</p>
-                </div>
+    <!-- ==================== HIDDEN DOM ELEMENTS ==================== -->
 
-                <div class="grid-2" style="gap: 30px;">
-                    <div
-                        style="background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                        <h3 style="color: #667eea; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 1.3em;">🚀</span> Project Overview
-                        </h3>
-                        <p style="line-height: 1.7; color: #475569; margin-bottom: 15px;">
-                            The <strong>Advanced Coordinate Conversion System</strong> is an industrial-grade GIS
-                            application engineered for high-accuracy spatial data transformation and visualization.
-                            Developed for surveyors, GIS specialists, and data engineers, it offers a unified pipeline
-                            for managing complex coordinate systems.
-                        </p>
-                        <p style="line-height: 1.7; color: #475569; margin-bottom: 15px; font-size: 0.9em;">
-                            The system leverages <strong>Web Worker technology</strong> to process massive datasets
-                            (Excel, CSV, Shapefile, KML, KMZ, GPX, GeoJSON & JSON) in background threads, ensuring zero
-                            UI latency.
-                            It features an advanced <strong>Leaflet-based mapping engine</strong> with dynamic
-                            clustering, spatial drawing, and high-fidelity PDF report generation for professional
-                            documentation.
-                        </p>
-                        <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div
-                                style="padding: 15px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #667eea;">
-                                <strong style="display: block; font-size: 0.9em; color: #667eea;">Spatial
-                                    Analytics</strong>
-                                <span style="font-size: 0.85em;">Turf.js Integrated Processing</span>
-                            </div>
-                            <div
-                                style="padding: 15px; background: #f8fafc; border-radius: 10px; border-left: 4px solid #667eea;">
-                                <strong style="display: block; font-size: 0.9em; color: #667eea;">Batch Engine</strong>
-                                <span style="font-size: 0.85em;">Zero-Latency Data Handling</span>
-                            </div>
-                        </div>
+    <!-- Elements required by legacy JS modules (conversion, history, etc.) -->
+    <div style="display:none;">
+        <div id="historyList"></div>
+        <div id="processingResult"></div>
+        <div id="latMin"></div>
+        <div id="latMax"></div>
+        <div id="lonMin"></div>
+        <div id="lonMax"></div>
+        <div id="sortOption"></div>
+    </div>
+
+    <!-- Native hidden file inputs -->
+    <div class="hidden-inputs">
+        <input type="file" id="excelFile"   accept=".xlsx,.xls,.csv" multiple onchange="handleFileUpload(event)">
+        <input type="file" id="geoJsonFile" accept=".geojson,.json" multiple onchange="handleGeoJsonUpload(event)">
+        <input type="file" id="kmlFile"     accept=".kml,.kmz" multiple onchange="handleKmlUpload(event)">
+        <input type="file" id="shpFile"     accept=".shp,.dbf,.shx,.prj" multiple onchange="handleShpUpload(event)">
+        <input type="file" id="gpxFile"     accept=".gpx" multiple onchange="handleGpxUpload(event)">
+        <!-- Generic smart input used by the Upload File button — supports multiple files -->
+        <input type="file" id="smartUploadFile"
+            accept=".xlsx,.xls,.csv,.geojson,.json,.kml,.kmz,.shp,.dbf,.shx,.prj,.gpx"
+            multiple onchange="handleSmartUpload(event)">
+        <input type="hidden" id="bufferRadius" value="1000">
+    </div>
+
+    <!-- ==================== MODAL OVERLAYS ==================== -->
+
+    <!-- Welcome Modal -->
+    <div id="welcomeModal" class="modal-overlay">
+        <div class="modal-content-wrapper" style="max-width:650px;">
+            <div class="modal-header-bar">
+                <h2>🚀 Welcome to GIS Converter Hub</h2>
+                <button class="close-btn" onclick="closeWelcomeModal()">&times;</button>
+            </div>
+            <div class="modal-body-scroll">
+                <p style="line-height:1.6;margin-bottom:20px;">
+                    This professional GIS utility allows high-precision coordinate transformation, map visualisation,
+                    and batch geospatial file processing.
+                </p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px;">
+                    <div style="background:#f8fafc;padding:15px;border-radius:12px;border:1px solid var(--border-light);">
+                        <strong style="display:block;margin-bottom:5px;color:#6366f1;">📍 Multi-Format Mapping</strong>
+                        <span style="font-size:12px;color:#64748b;">Plot CSV, KML, Shapefiles, and GPX tracks directly onto interactive layers.</span>
                     </div>
-
-                    <div
-                        style="background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                        <h3 style="color: #667eea; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 1.3em;">👨‍💻</span> Developer & Contact
-                        </h3>
-                        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
-                            <div
-                                style="width: 60px; height: 60px; background: #667eea; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 1.5em;">
-                                MM</div>
-                            <div>
-                                <h4 style="margin: 0; font-size: 1.1em;">M. Mubeen Maroof</h4>
-                                <p style="margin: 0; color: #64748b; font-size: 0.9em;">Sr. GIS Specialist</p>
-                            </div>
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <p style="margin: 0; font-size: 0.85em; color: #64748b; font-weight: 600;">For Query &
-                                Suggestions</p>
-                            <a href="mailto:mubeen.maroof@cyber.net.pk"
-                                style="text-decoration: none; color: #475569; display: flex; align-items: center; gap: 10px; font-size: 0.95em;">
-                                <span style="font-size: 1.2em;">✉️</span> mubeen.maroof@cyber.net.pk
-                            </a>
-                            <a href="https://cyber.net.pk/" target="_blank"
-                                style="text-decoration: none; color: #475569; display: flex; align-items: center; gap: 10px; font-size: 0.95em;">
-                                <img src="CN.jpg" style="height: 24px; border-radius: 4px;"> Cyber Internet Services
-                            </a>
-                        </div>
-                        <div
-                            style="margin-top: 25px; padding: 10px; text-align: center; background: #f1f5f9; border-radius: 8px; font-size: 0.85em; color: #64748b; font-weight: 600;">
-                            2026 All Rights Reserved
-                        </div>
+                    <div style="background:#f8fafc;padding:15px;border-radius:12px;border:1px solid var(--border-light);">
+                        <strong style="display:block;margin-bottom:5px;color:#10b981;">⚡ Zero UI Latency</strong>
+                        <span style="font-size:12px;color:#64748b;">Powered by Web Workers to handle heavy datasets in background threads.</span>
                     </div>
                 </div>
-
-                <div
-                    style="margin-top: 30px; background: white; padding: 30px; border-radius: 15px; border: 1px solid #e2e8f0;">
-                    <h3 style="color: #667eea; margin-bottom: 20px; text-align: center;">🛠️ Core Capabilities</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                        <div style="text-align: center; padding: 15px;">
-                            <span style="font-size: 2em; display: block; margin-bottom: 10px;">🎯</span>
-                            <strong style="display: block; margin-bottom: 5px;">Single Conversion</strong>
-                            <p style="font-size: 0.85em; color: #64748b; margin: 0;">DD to DMS & vice-versa</p>
-                        </div>
-                        <div style="text-align: center; padding: 15px;">
-                            <span style="font-size: 2em; display: block; margin-bottom: 10px;">📤</span>
-                            <strong style="display: block; margin-bottom: 5px;">Batch Upload</strong>
-                            <p style="font-size: 0.85em; color: #64748b; margin: 0;">Excel, CSV,KMZ, KML, GPX, SHP,
-                                GeoJSON, JSON</p>
-                        </div>
-                        <div style="text-align: center; padding: 15px;">
-                            <span style="font-size: 2em; display: block; margin-bottom: 10px;">🗺️</span>
-                            <strong style="display: block; margin-bottom: 5px;">Advanced Mapping</strong>
-                            <p style="font-size: 0.85em; color: #64748b; margin: 0;">Leaflet, Draw & Cluster</p>
-                        </div>
-                        <div style="text-align: center; padding: 15px;">
-                            <span style="font-size: 2em; display: block; margin-bottom: 10px;">🧹</span>
-                            <strong style="display: block; margin-bottom: 5px;">Data Cleanup</strong>
-                            <p style="font-size: 0.85em; color: #64748b; margin: 0;">Deduplication & Sanitizing</p>
-                        </div>
-                    </div>
+                <div style="text-align:center;padding:15px;background:#eff6ff;border:1px dashed #bfdbfe;border-radius:12px;color:#1e40af;font-size:13px;">
+                    ℹ️ Upload any spatial file on the left sidebar to convert, preview, and download instantly.
                 </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+                    <input type="checkbox" id="welcomeDoNotShow" style="width:16px;height:16px;" />
+                    <label for="welcomeDoNotShow" style="font-size:13px;color:#334155;cursor:pointer;">Don't show this welcome message again</label>
+                </div>
+            </div>
+            <div class="modal-footer-bar">
+                <button class="btn-convert-download" style="margin-left:0;" onclick="closeWelcomeModal()">Get Started 🚀</button>
             </div>
         </div>
     </div>
 
+    <!-- Manual Coords Modal (Single & Batch) -->
+    <div id="singleBatchModal" class="modal-overlay">
+        <div class="modal-content-wrapper">
+            <div class="modal-header-bar">
+                <h2>✍️ Manual Coordinate Conversion</h2>
+                <button class="close-btn" onclick="closeModal('singleBatchModal')">&times;</button>
+            </div>
+            <div class="modal-body-scroll">
+                <div class="modal-tabs">
+                    <button class="modal-tab-btn active" onclick="showManualTab('singleTab', this)">Single Coordinate</button>
+                    <button class="modal-tab-btn" onclick="showManualTab('batchTab', this)">Batch Coordinates</button>
+                </div>
+
+                <!-- Single tab -->
+                <div id="singleTab" class="manual-tab-content">
+                    <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px;border-radius:8px;margin-bottom:20px;font-size:13px;">
+                        <strong>Supported Formats:</strong>
+                        <p>• DMS: <code>29°24'28.7"N, 71°30'15.5"W</code></p>
+                        <p>• DD: <code>29.407972, -71.504306</code></p>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:16px;">
+                        <div class="settings-group" style="width:100%;">
+                            <label>Input Coordinate:</label>
+                            <input type="text" id="singleInput" class="settings-input" style="width:100%;"
+                                placeholder="e.g., 29°24'28.70&quot;N, 71°30'15.50&quot;W">
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                            <div class="settings-group">
+                                <label>Convert To:</label>
+                                <select id="conversionType" class="settings-select" style="width:100%;">
+                                    <option value="auto">Auto Detect &amp; Convert</option>
+                                    <option value="dd">To Decimal Degrees (DD)</option>
+                                    <option value="dms">To DMS</option>
+                                </select>
+                            </div>
+                            <div class="settings-group">
+                                <label>Precision: <span id="precisionValue">6</span> decimal places</label>
+                                <input type="range" id="precisionSlider" min="2" max="10" value="6"
+                                    oninput="updatePrecision(this.value)" style="width:100%;margin-top:10px;">
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;">
+                            <button class="tool-action-btn primary" onclick="convertSingle()">Convert</button>
+                            <button class="tool-action-btn success" onclick="showOnMap()">Show on Map</button>
+                        </div>
+                        <div id="singleResult" style="margin-top:15px;"></div>
+                    </div>
+                </div>
+
+                <!-- Batch tab -->
+                <div id="batchTab" class="manual-tab-content" style="display:none;">
+                    <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px;border-radius:8px;margin-bottom:20px;font-size:13px;">
+                        <strong>Enter coordinates, one pair per line.</strong>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:16px;">
+                        <div class="settings-group" style="width:100%;">
+                            <label>Input Coordinates:</label>
+                            <textarea id="batchInput" class="settings-input"
+                                style="width:100%;min-height:150px;font-family:monospace;"
+                                placeholder="29.407972, -71.504306&#10;29°24'28.7&quot;N, 71°30'15.5&quot;W"></textarea>
+                        </div>
+                        <div class="settings-group">
+                            <label>Convert To:</label>
+                            <select id="batchConversionType" class="settings-select" style="width:100%;">
+                                <option value="auto">Auto Detect &amp; Convert</option>
+                                <option value="dd">To Decimal Degrees (DD)</option>
+                                <option value="dms">To DMS</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">
+                            <button class="tool-action-btn primary" onclick="convertBatch()">Convert All</button>
+                            <button class="tool-action-btn secondary" onclick="copyResults()">Copy Results</button>
+                            <button class="tool-action-btn secondary" onclick="downloadCSV()">Download CSV</button>
+                            <button class="tool-action-btn success" onclick="showBatchOnMap()">Show on Map</button>
+                        </div>
+                        <div id="batchResult" style="margin-top:15px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer-bar">
+                <button class="tool-action-btn secondary" onclick="closeModal('singleBatchModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Processing Modal -->
+    <div id="processingModal" class="modal-overlay">
+        <div class="modal-content-wrapper" style="max-width:900px;">
+            <div class="modal-header-bar">
+                <h2>📊 Data Processing &amp; Cleanup Tools</h2>
+                <button class="close-btn" onclick="closeModal('processingModal')">&times;</button>
+            </div>
+            <div class="modal-body-scroll tool-modal-body">
+
+                <!-- Duplicate Remover -->
+                <div class="tool-card">
+                    <div class="tool-info-btn" onclick="toggleToolInfo('dedupeInfoBox')">i</div>
+                    <div id="dedupeInfoBox" class="tool-info-content">
+                        <h5>🗑️ Remove Duplicates</h5>
+                        <p>Deletes matching records in Excel/CSV based on key columns to keep data unique.</p>
+                    </div>
+                    <h3 style="color:#6366f1;margin-bottom:15px;display:flex;align-items:center;gap:8px;">🗑️ Remove Duplicates</h3>
+                    <div class="settings-group" style="margin-bottom:15px;">
+                        <label>Upload File:</label>
+                        <input type="file" id="dedupeFile" accept=".xlsx,.xls,.csv" class="settings-input tool-card-full-width">
+                        <div id="dedupeFileInfo" class="tool-card-note"></div>
+                    </div>
+                    <div id="dedupeColumnSelection"></div>
+                    <div class="tool-card-footer">
+                        <button class="tool-action-btn primary" onclick="removeDuplicatesFromFile()">Remove Duplicates</button>
+                        <button class="tool-action-btn secondary" onclick="clearDedupeData()">Clear</button>
+                    </div>
+                    <div id="dedupeResult" style="margin-top:15px;"></div>
+                </div>
+
+                <!-- Column Splitter -->
+                <div class="tool-card">
+                    <div class="tool-info-btn" onclick="toggleToolInfo('splitInfoBox')">i</div>
+                    <div id="splitInfoBox" class="tool-info-content">
+                        <h5>✂️ Split Column</h5>
+                        <p>Splits a selected column by delimiter (comma, space, etc.) into separate columns.</p>
+                    </div>
+                    <h3 style="color:#f59e0b;margin-bottom:15px;display:flex;align-items:center;gap:8px;">✂️ Column Splitter</h3>
+                    <div class="settings-group" style="margin-bottom:15px;">
+                        <label>Upload File:</label>
+                        <input type="file" id="splitFile" accept=".xlsx,.xls,.csv" class="settings-input tool-card-full-width">
+                        <div id="splitFileInfo" class="tool-card-note"></div>
+                    </div>
+                    <div id="splitSheetSelection"></div>
+                    <div id="splitColumnSelection"></div>
+                    <div id="splitDelimiterSelection" style="display:none;margin-top:15px;">
+                        <label style="font-weight:700;font-size:12px;display:block;margin-bottom:8px;">Select Delimiter:</label>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                            <label><input type="radio" name="splitDelimiter" value="all" class="splitDelimiter"> All Delims</label>
+                            <label><input type="radio" name="splitDelimiter" value="," class="splitDelimiter" checked> Comma (,)</label>
+                            <label><input type="radio" name="splitDelimiter" value=";" class="splitDelimiter"> Semicolon (;)</label>
+                            <label><input type="radio" name="splitDelimiter" value=":" class="splitDelimiter"> Colon (:)</label>
+                            <label><input type="radio" name="splitDelimiter" value=" " class="splitDelimiter"> Space</label>
+                        </div>
+                    </div>
+                    <div class="tool-card-footer">
+                        <button class="tool-action-btn warning" onclick="splitColumnData()">Split Column</button>
+                        <button class="tool-action-btn secondary" onclick="clearSplitData()">Clear</button>
+                    </div>
+                    <div id="splitResult" style="margin-top:15px;"></div>
+                </div>
+
+                <!-- File Comparison -->
+                <div class="tool-card">
+                    <div class="tool-info-btn" onclick="toggleToolInfo('compareInfoBox')">i</div>
+                    <div id="compareInfoBox" class="tool-info-content">
+                        <h5>🔄 File Comparison</h5>
+                        <p>Identifies records that exist in both files, or isolates unique rows.</p>
+                    </div>
+                    <h3 style="color:#3b82f6;margin-bottom:15px;display:flex;align-items:center;gap:8px;">🔄 File Comparison</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:15px;">
+                        <div class="settings-group">
+                            <label>File 1 (Primary):</label>
+                            <input type="file" id="comparisonFile1" accept=".xlsx,.xls,.csv" class="settings-input tool-card-full-width">
+                            <div id="file1Info" class="tool-card-note"></div>
+                        </div>
+                        <div class="settings-group">
+                            <label>File 2 (Comparison Target):</label>
+                            <input type="file" id="comparisonFile2" accept=".xlsx,.xls,.csv" class="settings-input tool-card-full-width">
+                            <div id="file2Info" class="tool-card-note"></div>
+                        </div>
+                    </div>
+                    <div id="comparisonColumnSelection"></div>
+                    <div class="tool-card-footer">
+                        <button class="tool-action-btn primary" onclick="compareFiles()">Compare Files</button>
+                        <button class="tool-action-btn secondary" onclick="clearComparisonData()">Clear</button>
+                    </div>
+                    <div id="comparisonResult" style="margin-top:15px;"></div>
+                </div>
+
+                <!-- File Merger -->
+                <div class="tool-card">
+                    <div class="tool-info-btn" onclick="toggleToolInfo('mergeInfoBox')">i</div>
+                    <div id="mergeInfoBox" class="tool-info-content">
+                        <h5>🔗 Smart File Merger</h5>
+                        <p>Joins two tables using a common key column, matching rows horizontally (Join operation).</p>
+                    </div>
+                    <h3 style="color:#10b981;margin-bottom:15px;display:flex;align-items:center;gap:8px;">🔗 Smart File Merger</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:15px;">
+                        <div class="settings-group">
+                            <label>Base File 1:</label>
+                            <input type="file" id="mergeFile1" accept=".xlsx,.xls,.csv" class="settings-input tool-card-full-width">
+                            <div id="mergeFile1Info" class="tool-card-note"></div>
+                        </div>
+                        <div class="settings-group">
+                            <label>Join File 2:</label>
+                            <input type="file" id="mergeFile2" accept=".xlsx,.xls,.csv" class="settings-input tool-card-full-width">
+                            <div id="mergeFile2Info" class="tool-card-note"></div>
+                        </div>
+                    </div>
+                    <div id="mergeColumnSelection"></div>
+                    <div class="tool-card-footer">
+                        <button class="tool-action-btn success" onclick="mergeFiles()">Merge Files</button>
+                        <button class="tool-action-btn secondary" onclick="clearMergeData()">Clear</button>
+                    </div>
+                    <div id="mergeResult" style="margin-top:15px;"></div>
+                </div>
+
+                <!-- Coordinate Sanitizer -->
+                <div class="tool-card">
+                    <div class="tool-info-btn" onclick="toggleToolInfo('sanitizeInfoBox')">i</div>
+                    <div id="sanitizeInfoBox" class="tool-info-content">
+                        <h5>🧹 Coordinate Sanitizer</h5>
+                        <p>Strips text characters, spaces, and formatting noises from coordinate data fields.</p>
+                    </div>
+                    <h3 style="color:#ec4899;margin-bottom:15px;display:flex;align-items:center;gap:8px;">🧹 Coordinate Sanitizer</h3>
+                    <div class="settings-group" style="margin-bottom:15px;">
+                        <label>Upload File:</label>
+                        <input type="file" id="sanitizeFile" accept=".xlsx,.xls,.csv" class="settings-input tool-card-full-width">
+                        <div id="sanitizeFileInfo" class="tool-card-note"></div>
+                    </div>
+                    <div id="sanitizeColumnSelection"></div>
+                    <div id="sanitizeOptions" style="background:#fdf2f8;border:1px solid #fbcfe8;padding:15px;border-radius:12px;margin-top:15px;">
+                        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;">
+                            <label><input type="checkbox" id="sanitizeOptAll" onchange="toggleAllSanitizeOptions(this)"> <b>Select All</b></label>
+                            <label><input type="checkbox" class="sanitize-opt" value="alpha"> Letters (A-Z)</label>
+                            <label><input type="checkbox" class="sanitize-opt" value="spaces"> Spaces</label>
+                            <label><input type="checkbox" class="sanitize-opt" value="symbols"> Symbols</label>
+                        </div>
+                        <div style="border-top:1px solid #fbcfe8;padding-top:10px;display:flex;gap:14px;flex-wrap:wrap;">
+                            <label><input type="checkbox" class="sanitize-opt sanitize-delim-all" id="sanitizeOptAllDelims" value="all_delims" onchange="handleAllDelimsChange(this)"> <b>All Delimiters</b></label>
+                            <label><input type="checkbox" class="sanitize-opt sanitize-delim-single" value="comma" onchange="handleSingleDelimChange()"> Comma (,)</label>
+                            <label><input type="checkbox" class="sanitize-opt sanitize-delim-single" value="semicolon" onchange="handleSingleDelimChange()"> Semicolon (;)</label>
+                            <label><input type="checkbox" class="sanitize-opt sanitize-delim-single" value="colon" onchange="handleSingleDelimChange()"> Colon (:)</label>
+                        </div>
+                    </div>
+                    <div class="tool-card-footer">
+                        <button class="tool-action-btn warning" onclick="sanitizeCoordinates()">Clean Data</button>
+                        <button class="tool-action-btn secondary" onclick="clearSanitizeData()">Clear</button>
+                    </div>
+                    <div id="sanitizeResult" style="margin-top:15px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer-bar">
+                <button class="tool-action-btn secondary" onclick="closeModal('processingModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Presets Modal -->
+    <div id="presetsModal" class="modal-overlay">
+        <div class="modal-content-wrapper">
+            <div class="modal-header-bar">
+                <h2>⚙️ Saved Presets &amp; Configurations</h2>
+                <button class="close-btn" onclick="closeModal('presetsModal')">&times;</button>
+            </div>
+            <div class="modal-body-scroll">
+                <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:20px;border-bottom:1px solid var(--border-light);padding-bottom:20px;">
+                    <h3>Create New Preset</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                        <div class="settings-group">
+                            <label>Preset Name:</label>
+                            <input type="text" id="presetName" class="settings-input" placeholder="e.g. My Survey Config">
+                        </div>
+                        <div class="settings-group">
+                            <label>Conversion Target:</label>
+                            <select id="presetConversion" class="settings-select">
+                                <option value="auto">Auto Detect</option>
+                                <option value="dd">To DD</option>
+                                <option value="dms">To DMS</option>
+                            </select>
+                        </div>
+                        <div class="settings-group">
+                            <label>Precision:</label>
+                            <input type="number" id="presetPrecision" class="settings-input" value="6" min="2" max="10">
+                        </div>
+                        <div class="settings-group">
+                            <label>Default Map Layer:</label>
+                            <select id="presetMapLayer" class="settings-select">
+                                <option value="openstreetmap">Street Map</option>
+                                <option value="google">Google Maps</option>
+                                <option value="satellite">Satellite</option>
+                                <option value="terrain">Terrain</option>
+                                <option value="esri">ESRI Terrain</option>
+                            </select>
+                        </div>
+                        <div class="settings-group">
+                            <label>Marker Style:</label>
+                            <select id="presetMarkerStyle" class="settings-select">
+                                <option value="numbered">Numbered Circles</option>
+                                <option value="pin">📍 Pin</option>
+                                <option value="location">📌 Location</option>
+                                <option value="star">⭐ Star</option>
+                                <option value="flag">🚩 Flag</option>
+                                <option value="target">🎯 Target</option>
+                            </select>
+                        </div>
+                        <div class="settings-group">
+                            <label>Marker Size (px):</label>
+                            <input type="number" id="presetMarkerSize" class="settings-input" value="35" min="20" max="80">
+                        </div>
+                    </div>
+                    <button class="btn-convert-download" style="margin-left:0;margin-top:10px;" onclick="savePreset()">Save Preset</button>
+                </div>
+                <div>
+                    <h3>Active Presets</h3>
+                    <div id="presetsList" style="margin-top:15px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer-bar">
+                <button class="btn-browse" onclick="closeModal('presetsModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="modal-overlay">
+        <div class="modal-content-wrapper" style="max-width:700px;">
+            <div class="modal-header-bar">
+                <h2>ℹ️ About GIS Converter Hub</h2>
+                <button class="close-btn" onclick="closeModal('aboutModal')">&times;</button>
+            </div>
+            <div class="modal-body-scroll">
+                <div style="background:linear-gradient(135deg,#0f2b48 0%,#0b192c 100%);color:white;padding:24px;border-radius:16px;margin-bottom:24px;text-align:center;">
+                    <h3 style="font-size:20px;margin-bottom:8px;">🌍 Advanced Coordinate Converter</h3>
+                    <p style="font-size:13px;opacity:.85;">Professional Spatial Data Transformation &amp; Visualisation Engine</p>
+                </div>
+                <div style="line-height:1.6;font-size:14px;color:#475569;display:flex;flex-direction:column;gap:12px;">
+                    <p>The <strong>GIS Converter Hub</strong> is a high-performance workspace engineered for spatial analysts, surveyors, and mapping specialists.</p>
+                    <p>Built with a vanilla web technology stack, the engine converts large files using background worker threads to guarantee zero blocking on main UI actions. Supported formats include Shapefile (.shp, .dbf, .shx, .prj), GeoJSON, KML/KMZ, GPX tracks, and coordinate tables (CSV, Excel).</p>
+                    <div style="border-top:1px solid var(--border-light);padding-top:15px;margin-top:10px;">
+                        <h4 style="color:#0f172a;margin-bottom:5px;">Contact Info</h4>
+                        <p style="font-size:12px;color:#64748b;">Developer: M. Mubeen Maroof (Sr. GIS Specialist)</p>
+                        <p style="font-size:12px;color:#64748b;">Email: <a href="mailto:mubeen.maroof@cyber.net.pk">mubeen.maroof@cyber.net.pk</a></p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer-bar">
+                <button class="btn-browse" onclick="closeModal('aboutModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div id="previewModal" class="modal-overlay">
+        <div class="modal-content-wrapper" style="max-width:950px;width:95%;">
+            <div class="modal-header-bar">
+                <h2 id="previewModalTitle">File Preview &amp; Configuration</h2>
+                <button class="close-btn" onclick="closeModal('previewModal')">&times;</button>
+            </div>
+            <div class="modal-body-scroll">
+                <div id="previewHelperText" style="font-size:13px;color:#475569;margin-bottom:16px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+                    Preview the uploaded file and choose the available action buttons to clear, export, or show data on the map.
+                </div>
+
+                <!-- Excel/CSV preview -->
+                <div id="excelPreviewWrapper" class="preview-section" style="display:none;">
+                    <div id="columnSelection"></div>
+                    <div id="excelResult"></div>
+                    <div class="button-group preview-action-row" id="excelClearBtnGroup">
+                        <button class="tool-action-btn danger" onclick="clearExcelData(); closeModal('previewModal');">Clear Data</button>
+                    </div>
+                </div>
+
+                <!-- GeoJSON preview -->
+                <div id="geojsonPreviewWrapper" class="preview-section" style="display:none;">
+                    <div id="geoJsonResult"></div>
+                    <div class="button-group preview-action-row" id="geoJsonClearBtnGroup">
+                        <button class="tool-action-btn danger" onclick="clearGeoJsonData(); closeModal('previewModal');">Clear Data</button>
+                    </div>
+                </div>
+
+                <!-- KML preview -->
+                <div id="kmlPreviewWrapper" class="preview-section" style="display:none;">
+                    <div id="kmlResult"></div>
+                    <div class="button-group preview-action-row" id="kmlClearBtnGroup">
+                        <button class="tool-action-btn danger" onclick="clearKmlData(); closeModal('previewModal');">Clear Data</button>
+                    </div>
+                </div>
+
+                <!-- SHP preview -->
+                <div id="shpPreviewWrapper" class="preview-section" style="display:none;">
+                    <div id="shpResult"></div>
+                    <div class="button-group preview-action-row preview-action-row--space-between" id="shpTopClearBtnGroup">
+                        <button class="tool-action-btn danger" onclick="clearShpData(); closeModal('previewModal');">Clear Data</button>
+                        <div id="shpBottomActionBtnGroup" class="preview-action-row preview-action-row--wrap">
+                            <label class="preview-export-label">SHP Export Format:</label>
+                            <div id="shpExportFormatPlaceholder"></div>
+                            <button class="tool-action-btn primary" onclick="downloadShpResults()">📥 Download</button>
+                            <button class="tool-action-btn success" onclick="showShpOnMap(); closeModal('previewModal');">🗺️ Show Map</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GPX preview -->
+                <div id="gpxPreviewWrapper" class="preview-section" style="display:none;">
+                    <div id="gpxResult"></div>
+                    <div class="button-group preview-action-row" id="gpxClearBtnGroup">
+                        <button class="tool-action-btn danger" onclick="clearGpxData(); closeModal('previewModal');">Clear Data</button>
+                    </div>
+                </div>
+
+                <!-- Data Processing Preview -->
+                <div id="processingPreviewWrapper" class="preview-section" style="display:none;">
+                    <h3 style="margin-top: 0; color: #111;">Preview Result</h3>
+                    <div id="processingPreviewResult" style="padding: 0; overflow-x: auto; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;"></div>
+                </div>
+            </div>
+            <div class="modal-footer-bar">
+                <button class="tool-action-btn secondary" onclick="closeModal('previewModal')">Close Preview</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Selection Modal for Conversion -->
+    <div id="fileSelectionModal" class="modal-overlay">
+        <div class="modal-content-wrapper" style="max-width:600px;">
+            <div class="modal-header-bar">
+                <h2>📁 Select File to Convert</h2>
+                <button class="close-btn" onclick="closeModal('fileSelectionModal')">&times;</button>
+            </div>
+            <div class="modal-body-scroll">
+                <div style="font-size:14px;color:#475569;margin-bottom:20px;padding:14px;background:#f0fdf4;border:1px solid #86efac;border-radius:12px;">
+                    ℹ️ <strong>Multiple files detected.</strong> Select which file you want to convert to the target format.
+                </div>
+                <div id="fileSelectionList" style="display:flex;flex-direction:column;gap:12px;">
+                    <!-- File options will be generated here -->
+                </div>
+            </div>
+            <div class="modal-footer-bar">
+                <button class="tool-action-btn secondary" onclick="closeModal('fileSelectionModal')">Cancel</button>
+                <button class="btn-convert-download" id="fileSelectionConfirmBtn" onclick="proceedWithSelectedFile()" style="margin-left:auto;">Convert Selected</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== GIS SCRIPTS ==================== -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-
-    <!-- Advanced GIS Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
@@ -890,93 +741,42 @@
     <script src="https://unpkg.com/@nickrsan/shp-write@latest/shpwrite.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.2/shp.min.js"></script>
 
-    <!-- Modularized component scripts -->
-    <script src="src/js/security.js?v=20260508"></script>
-    <script src="src/js/variables.js?v=20260508_05"></script>
-    <script src="src/js/utils.js?v=20260508_05"></script>
-    <script src="src/js/theme.js?v=20260508_05"></script>
-    <script src="src/js/tabs.js?v=20260508_05"></script>
-    <script src="src/js/conversion.js?v=20260508_05"></script>
-    <script src="src/js/map.js?v=20260508_05"></script>
-    <script src="src/js/tools.js?v=20260508_05"></script>
-    <script src="src/js/excel.js?v=20260508_05"></script>
-    <script src="src/js/geojson.js?v=20260508_05"></script>
-    <script src="src/js/kml.js?v=20260508_05"></script>
-    <script src="src/js/shp.js?v=20260508_05"></script>
-    <script src="src/js/gpx.js?v=20260508_05"></script>
-    <script src="src/js/app.js?v=20260508"></script>
+    <!-- Project core modular scripts -->
+    <script src="src/js/security.js?v=20260612"></script>
+    <script src="src/js/variables.js?v=20260612"></script>
+    <script src="src/js/utils.js?v=20260612"></script>
+    <script src="src/js/theme.js?v=20260612"></script>
+    <script src="src/js/tabs.js?v=20260612"></script>
+    <script src="src/js/conversion.js?v=20260612"></script>
+    <script src="src/js/map.js?v=20260612"></script>
+    <script src="src/js/tools.js?v=20260612"></script>
+    <script src="src/js/excel.js?v=20260612"></script>
+    <script src="src/js/geojson.js?v=20260612"></script>
+    <script src="src/js/kml.js?v=20260612"></script>
+    <script src="src/js/shp.js?v=20260612"></script>
+    <script src="src/js/gpx.js?v=20260612"></script>
+    <script src="src/js/app.js?v=20260612"></script>
 
-    <!-- Welcome Modal -->
-    <div id="welcomeModal" class="modal-overlay">
-        <div class="modal-content premium-modal">
-            <div class="modal-header">
-                <h2>🚀 Welcome to Advanced Coordinate Converter</h2>
-                <button class="close-modal-btn" onclick="closeWelcomeModal()">&times;</button>
-            </div>
-            <div class="modal-body scrollable-content">
-                <div class="welcome-intro">
-                    <p>Designed for professional GIS specialists and coordinate mapping, this tool provides powerful
-                        features for all your spatial data needs.</p>
-                </div>
+    <!-- Dashboard UI controller (must be last) -->
+    <script src="src/js/helper.js?v=20260612"></script>
 
-                <div class="feature-grid">
-                    <div class="feature-item">
-                        <span class="feature-icon">🎯</span>
-                        <div class="feature-text">
-                            <h4>Single Conversion</h4>
-                            <p>Quickly convert between DD and DMS formats with high precision.</p>
-                        </div>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">📚</span>
-                        <div class="feature-text">
-                            <h4>Batch Conversion</h4>
-                            <p>Process multiple coordinates at once and download as CSV.</p>
-                        </div>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">📊</span>
-                        <div class="feature-text">
-                            <h4>File Upload</h4>
-                            <p>Process professional GIS data including XLSX, CSV, GeoJSON, KML, GPX, and Shapefiles.</p>
-                        </div>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">🗺️</span>
-                        <div class="feature-text">
-                            <h4>Map View</h4>
-                            <p>Visualize coordinates on multiple map layers with clustering & heatmaps.</p>
-                        </div>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">🧹</span>
-                        <div class="feature-text">
-                            <h4>Data Processing</h4>
-                            <p>Merge files, remove duplicates, Compare files and sanitize coordinate data.</p>
-                        </div>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-icon">⚙️</span>
-                        <div class="feature-text">
-                            <h4>Presets</h4>
-                            <p>Save your preferred settings for map layers, markers, and precision.</p>
-                        </div>
-                    </div>
-                </div>
+    <!-- Dashboard boot script -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // ── Map initialisation ──────────────────────────────────
+            setTimeout(() => {
+                if (typeof initMap === "function" && !window.map) {
+                    initMap();
+                }
+            }, 500);
 
-                <div class="about-hint"
-                    style="text-align: center; margin-top: 25px; padding: 15px; background: #f0f7ff; border-radius: 10px; border: 1px solid #cce3ff; color: #0056b3; font-size: 0.9em;">
-                    <span style="font-size: 1.2em;">ℹ️</span> For project details and contact information, please visit
-                    the <strong>About</strong> tab.
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary-premium" onclick="closeWelcomeModal()">Get Started 🚀</button>
-            </div>
-        </div>
-    </div>
+            // NOTE:
+            // Removed global monkey-patching of showTab/showOnMap/showBatchOnMap/show{Type}OnMap
+            // to avoid timing/race issues and unpredictable behavior.
+            // Map initialization is handled via initMap() below.
 
-    <link rel="stylesheet" href="src/styles.css">
+        });
+    </script>
 </body>
 
 </html>

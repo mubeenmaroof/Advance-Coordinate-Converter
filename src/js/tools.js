@@ -149,8 +149,8 @@ function displayDedupeSheetSelection(workbook) {
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">`;
   workbook.SheetNames.forEach((sheetName) => {
     html += `
-            <button class="btn" onclick="selectDedupeSheet('${sheetName}')" 
-                    style="padding: 12px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+            <button class="tool-action-btn" onclick="selectDedupeSheet('${sheetName}')" 
+                    style="padding: 12px; background: #667eea; color: white; border-radius: 6px; font-weight: 600;">
                 📊 ${sheetName}
             </button>`;
   });
@@ -180,9 +180,9 @@ function displayDedupeColumnSelection() {
   let html = `
         <div style="margin-bottom: 15px;">
             <label style="font-weight: 600; display: block; margin-bottom: 10px;">Select columns to check for duplicates:</label>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <button class="btn btn-sm" onclick="selectAllDedupeColumns()" style="padding: 8px 15px; font-size: 0.9em;">✓ Select All</button>
-                <button class="btn btn-sm" onclick="deselectAllDedupeColumns()" style="padding: 8px 15px; font-size: 0.9em; background: #6c757d;">✗ Deselect All</button>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                <button class="tool-action-btn secondary" onclick="selectAllDedupeColumns()" style="padding: 8px 16px; font-size: 0.9em; min-width: 140px;">✓ Select All</button>
+                <button class="tool-action-btn danger" onclick="deselectAllDedupeColumns()" style="padding: 8px 16px; font-size: 0.9em; min-width: 140px;">✗ Deselect All</button>
             </div>
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">`;
@@ -271,14 +271,14 @@ function displayDedupeResults(uniqueRows, duplicateRows, headers) {
                 <option value="xlsx">Excel (XLSX) - High Quality</option>
                 <option value="csv">CSV - Light & Faster</option>
             </select>
-            <div style="display: flex; gap: 10px; flex: 1; min-width: 300px;">
-                <button class="btn btn-success" onclick="downloadDedupeResult()" style="flex: 1; padding: 10px; font-weight: 700;">📥 Clean Data</button>
-                <button class="btn btn-warning" onclick="downloadRemovedDuplicates()" style="flex: 1; padding: 10px; font-weight: 700; background: #ff9800; border: none;">🗑️ Duplicates</button>
-                <button class="btn btn-secondary" onclick="viewDedupeDetails()" style="flex: 1; padding: 10px; font-weight: 700;">👁️ View Preview</button>
+            <div style="display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: nowrap; min-width: 0;">
+                <button class="tool-action-btn primary" onclick="downloadDedupeResult()" style="min-width: 140px; white-space: nowrap;">📥 Clean Data</button>
+                <button class="tool-action-btn warning" onclick="downloadRemovedDuplicates()" style="min-width: 140px; white-space: nowrap;">🗑️ Duplicates</button>
+                <button class="tool-action-btn secondary" onclick="viewDedupeDetails()" style="min-width: 140px; white-space: nowrap;">👁️ View Preview</button>
             </div>
         </div>
         
-        <div id="dedupeDetails" style="display: none; margin-top: 20px;"></div>`;
+        `;
   window.lastDedupeResult = { uniqueRows, duplicateRows, headers };
   document.getElementById("dedupeResult").innerHTML = html;
 }
@@ -286,62 +286,51 @@ function displayDedupeResults(uniqueRows, duplicateRows, headers) {
 function viewDedupeDetails() {
   if (!window.lastDedupeResult) return;
   const { uniqueRows, duplicateRows, headers } = window.lastDedupeResult;
-  const detailsDiv = document.getElementById("dedupeDetails");
-  if (detailsDiv.style.display === "none") {
-    let html = `
-            <div style="display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 20px;">
-                <div>
-                    <h5 style="color: #28a745;">🟢 Unique Records (${uniqueRows.length - 1})</h5>
-                    <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px;">
-                        <table style="width: 100%; font-size: 0.85em; border-collapse: collapse;">
-                            <thead style="position: sticky; top: 0; background: #28a745; color: white;">
-                                <tr>
-                                    ${headers.map((h) => `<th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">${h}</th>`).join("")}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${uniqueRows.slice(1, 51).map((row, idx) => `
-                                    <tr style="background: ${idx % 2 === 0 ? "#fff" : "#f8f9fa"};">
-                                        ${row.map(cell => `<td style="padding: 8px; border-bottom: 1px solid #ddd;">${cell}</td>`).join("")}
-                                    </tr>
-                                `).join("")}
-                                ${uniqueRows.length > 51 ? `<tr><td colspan="${headers.length}" style="text-align: center; padding: 10px; color: #666;">... and ${uniqueRows.length - 51} more records</td></tr>` : ""}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>`;
-    if (duplicateRows.length > 0) {
-      html += `
-                <div>
-                    <h5 style="color: #dc3545;">🔴 Removed Duplicates (${duplicateRows.length})</h5>
-                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px;">
-                        <table style="width: 100%; font-size: 0.85em; border-collapse: collapse;">
-                            <thead style="position: sticky; top: 0; background: #dc3545; color: white;">
-                                <tr>
-                                    ${headers.map((h) => `<th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">${h}</th>`).join("")}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${duplicateRows
-          .map(
-            (row, idx) => `
-                                    <tr style="background: ${idx % 2 === 0 ? "#fff" : "#fff3f3"};">
-                                        ${row.map((cell) => `<td style="padding: 8px; border-bottom: 1px solid #ddd; color: #dc3545;">${cell}</td>`).join("")}
-                                    </tr>
-                                `,
-          )
-          .join("")}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>`;
-    }
-    html += "</div>";
-    detailsDiv.innerHTML = html;
-    detailsDiv.style.display = "block";
-  } else {
-    detailsDiv.style.display = "none";
+  
+  let html = `<div style="overflow-x:auto; padding: 10px; background: #ffffff; border-radius: 10px;">
+    <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+      <div>
+        <h5 style="color: #28a745; margin-top: 0;">🟢 Unique Records (${uniqueRows.length - 1})</h5>
+        <table style="width: 100%; min-width: 720px; font-size: 0.85em; border-collapse: collapse;">
+          <thead style="position: sticky; top: 0; background: #28a745; color: white;">
+            <tr>
+              ${headers.map((h) => `<th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">${h}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${uniqueRows.slice(1, 51).map((row, idx) => `
+              <tr style="background: ${idx % 2 === 0 ? "#fff" : "#f8f9fa"};">
+                ${row.map(cell => `<td style="padding: 8px; border-bottom: 1px solid #ddd;">${cell}</td>`).join("")}
+              </tr>
+            `).join("")}
+            ${uniqueRows.length > 51 ? `<tr><td colspan="${headers.length}" style="text-align: center; padding: 10px; color: #666; font-weight: 700;">... and ${uniqueRows.length - 51} more records</td></tr>` : ""}
+          </tbody>
+        </table>
+      </div>`;
+  
+  if (duplicateRows.length > 0) {
+    html += `
+      <div>
+        <h5 style="color: #dc3545; margin-top: 0;">🔴 Removed Duplicates (${duplicateRows.length})</h5>
+        <table style="width: 100%; min-width: 720px; font-size: 0.85em; border-collapse: collapse;">
+          <thead style="position: sticky; top: 0; background: #dc3545; color: white;">
+            <tr>
+              ${headers.map((h) => `<th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">${h}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${duplicateRows.map((row, idx) => `
+              <tr style="background: ${idx % 2 === 0 ? "#fff" : "#fff3f3"};">
+                ${row.map((cell) => `<td style="padding: 8px; border-bottom: 1px solid #ddd; color: #dc3545;">${cell}</td>`).join("")}
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>`;
   }
+  
+  html += `</div></div>`;
+  showProcessingPreviewModal('Duplicate Removal Preview', html);
 }
 
 function downloadDedupeResult() {
@@ -512,8 +501,8 @@ function displaySplitSheetSelection(workbook) {
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">`;
   workbook.SheetNames.forEach((sheetName) => {
     html += `
-            <button class="btn" onclick="selectSplitSheet('${sheetName}')" 
-                    style="padding: 12px; background: #ff9800; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+            <button class="tool-action-btn" onclick="selectSplitSheet('${sheetName}')" 
+                    style="padding: 12px; background: #ff9800; color: white; border-radius: 6px; font-weight: 600;">
                 📊 ${sheetName}
             </button>`;
   });
@@ -650,19 +639,19 @@ function displaySplitResults(splitRows, successCount, delimiter) {
             </div>
         </div>
         
-        <div style="margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #ff9800; display: flex; align-items: center; justify-content: center; gap: 15px;">
+        <div style="margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #ff9800; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
             <label style="font-weight: 700; font-size: 0.9em; color: #ff9800;">Export Format:</label>
-            <select id="splitExportFormat" style="padding: 6px 12px; border-radius: 4px; border: 1px solid #ccc; font-weight: 600;">
+            <select id="splitExportFormat" style="padding: 6px 12px; border-radius: 4px; border: 1px solid #ccc; font-weight: 600; min-width: 150px;">
                 <option value="xlsx">Excel (XLSX) - High Quality</option>
                 <option value="csv">CSV - Light & Faster</option>
             </select>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-success" onclick="downloadSplitResult()" style="background: #ff9800; color: white; border: none;">📥 Download Split Data</button>
-                <button class="btn btn-secondary" onclick="viewSplitDetails()">👁️ View Preview</button>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                <button class="tool-action-btn success" onclick="downloadSplitResult()" style="min-width: 140px;">📥 Download Split Data</button>
+                <button class="tool-action-btn secondary" onclick="viewSplitDetails()" style="min-width: 140px;">👁️ View Preview</button>
             </div>
         </div>
         
-        <div id="splitDetails" style="display: none; margin-top: 20px;"></div>`;
+        `;
   window.lastSplitResult = { splitRows };
   document.getElementById("splitResult").innerHTML = html;
 }
@@ -670,38 +659,27 @@ function displaySplitResults(splitRows, successCount, delimiter) {
 function viewSplitDetails() {
   if (!window.lastSplitResult) return;
   const { splitRows } = window.lastSplitResult;
-  const detailsDiv = document.getElementById("splitDetails");
-  if (detailsDiv.style.display === "none") {
-    let html = `
-            <div>
-                <h5 style="color: #ff9800;">✂️ Split Data Preview (First 20 rows)</h5>
-                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px;">
-                    <table style="width: 100%; font-size: 0.85em; border-collapse: collapse;">
-                        <thead style="position: sticky; top: 0; background: #ff9800; color: white;">
-                            <tr>
-                                ${splitRows[0].map((h) => `<th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">${h}</th>`).join("")}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${splitRows
-        .slice(1, 21)
-        .map(
-          (row, idx) => `
-                                <tr style="background: ${idx % 2 === 0 ? "#fff" : "#fff8f0"};">
-                                    ${row.map((cell) => `<td style="padding: 8px; border-bottom: 1px solid #ddd;">${cell}</td>`).join("")}
-                                </tr>
-                            `,
-        )
-        .join("")}
-                        </tbody>
-                    </table>
-                </div>
-            </div>`;
-    detailsDiv.innerHTML = html;
-    detailsDiv.style.display = "block";
-  } else {
-    detailsDiv.style.display = "none";
-  }
+  
+  let html = `<div style="overflow-x:auto; padding: 10px; background: #ffffff; border-radius: 10px;">
+    <h5 style="color: #ff9800; margin-top: 0;">✂️ Split Data Preview (First 20 rows of ${splitRows.length - 1})</h5>
+    <table style="width: 100%; min-width: 720px; font-size: 0.85em; border-collapse: collapse;">
+      <thead style="position: sticky; top: 0; background: #ff9800; color: white;">
+        <tr>
+          ${splitRows[0].map((h) => `<th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">${h}</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        ${splitRows.slice(1, 21).map((row, idx) => `
+          <tr style="background: ${idx % 2 === 0 ? "#fff" : "#fff8f0"};">
+            ${row.map((cell) => `<td style="padding: 8px; border-bottom: 1px solid #ddd;">${cell}</td>`).join("")}
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    ${splitRows.length > 21 ? `<div style="padding: 10px; text-align: center; background: #fff9e6; color: #ff9800; font-weight: 700; border-top: 1px solid #ffe0b2; margin-top: 10px;">Showing 20 rows of ${splitRows.length - 1} total rows</div>` : ""}
+  </div>`;
+  
+  showProcessingPreviewModal('Split Data Preview', html);
 }
 
 function downloadSplitResult() {
@@ -892,7 +870,7 @@ function displaySheetSelectionForComparison(workbook, fileNum) {
 
   workbook.SheetNames.forEach((sheetName, index) => {
     html += `
-            <button class="btn" onclick="selectComparisonSheet('${sheetName}', ${fileNum})" style="padding: 12px 10px; text-align: center; font-size: 0.9em;">
+            <button class="tool-action-btn secondary" onclick="selectComparisonSheet('${sheetName}', ${fileNum})" style="padding: 12px 10px; text-align: center; font-size: 0.9em;">
                 📊 ${sheetName}
             </button>
         `;
@@ -962,11 +940,11 @@ function displayComparisonColumnSelection() {
     '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">';
   html +=
     '<h6 style="margin: 0; color: #667eea; font-weight: 600;">File 1 Columns:</h6>';
-  html += '<div style="display: flex; gap: 10px;">';
+  html += '<div style="display: flex; gap: 10px; flex-wrap: wrap;">';
   html +=
-    '<button class="btn btn-success" onclick="selectAllFile1Cols()" style="padding: 6px 12px; font-size: 0.9em;">✓ Select All</button>';
+    '<button class="tool-action-btn success" onclick="selectAllFile1Cols()" style="padding: 6px 12px; font-size: 0.9em; min-width: 120px;">✓ Select All</button>';
   html +=
-    '<button class="btn btn-secondary" onclick="deselectAllFile1Cols()" style="padding: 6px 12px; font-size: 0.9em;">✗ Deselect All</button>';
+    '<button class="tool-action-btn secondary" onclick="deselectAllFile1Cols()" style="padding: 6px 12px; font-size: 0.9em; min-width: 120px;">✗ Deselect All</button>';
   html += "</div>";
   html += "</div>";
   html += '<div class="checkbox-group" id="file1ColsGroup">';
@@ -990,9 +968,9 @@ function displayComparisonColumnSelection() {
     '<h6 style="margin: 0; color: #667eea; font-weight: 600;">File 2 Columns:</h6>';
   html += '<div style="display: flex; gap: 10px;">';
   html +=
-    '<button class="btn btn-success" onclick="selectAllFile2Cols()" style="padding: 6px 12px; font-size: 0.9em;">✓ Select All</button>';
+    '<button class="tool-action-btn success" onclick="selectAllFile2Cols()" style="padding: 6px 12px; font-size: 0.9em; min-width: 120px;">✓ Select All</button>';
   html +=
-    '<button class="btn btn-secondary" onclick="deselectAllFile2Cols()" style="padding: 6px 12px; font-size: 0.9em;">✗ Deselect All</button>';
+    '<button class="tool-action-btn secondary" onclick="deselectAllFile2Cols()" style="padding: 6px 12px; font-size: 0.9em; min-width: 120px;">✗ Deselect All</button>';
   html += "</div>";
   html += "</div>";
   html += '<div class="checkbox-group" id="file2ColsGroup">';
@@ -1108,25 +1086,25 @@ function displayComparisonResults(duplicates, cols1, cols2) {
             <div style="margin-top: 25px; padding-top: 25px; border-top: 2px solid rgba(255,255,255,0.3); display: flex; gap: 15px; overflow-x: auto; padding-bottom: 15px; justify-content: center;">
                 <div style="flex: 1; min-width: 180px; max-width: 300px; text-align: center;">
                     <div style="font-size: 1em; margin-bottom: 10px; font-weight: 700; opacity: 1; color: #ffffffff;">${duplicates.inBoth.length} Matched</div>
-                    <button class="btn btn-success" onclick="downloadMatchedExcel()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <button class="tool-action-btn success" onclick="downloadMatchedExcel()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                         💾 Matched (File 1)
                     </button>
                 </div>
                 <div style="flex: 1; min-width: 180px; max-width: 300px; text-align: center;">
                     <div style="font-size: 1em; margin-bottom: 10px; font-weight: 700; opacity: 1; color: #ffffffff;">${duplicates.onlyInFile1.length} only File 1</div>
-                    <button class="btn btn-secondary" onclick="downloadFile1Unmatched()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <button class="tool-action-btn secondary" onclick="downloadFile1Unmatched()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                         💾 Unmatched (File 1)
                     </button>
                 </div>
                 <div style="flex: 1; min-width: 180px; max-width: 300px; text-align: center;">
                     <div style="font-size: 1em; margin-bottom: 10px; font-weight: 700; opacity: 1; color: #f5f5f5ff;">${duplicates.onlyInFile2.length} only File 2</div>
-                    <button class="btn btn-danger" onclick="downloadFile2Unmatched()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <button class="tool-action-btn danger" onclick="downloadFile2Unmatched()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                         💾 Unmatched (File 2)
                     </button>
                 </div>
                 <div style="flex: 1; min-width: 180px; max-width: 300px; text-align: center;">
                     <div style="font-size: 1em; margin-bottom: 10px; font-weight: 700; opacity: 1; color: #fafafaff;">${duplicates.onlyInFile1.length + duplicates.onlyInFile2.length} Total</div>
-                    <button class="btn btn-warning" onclick="downloadUnmatchedExcel()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <button class="tool-action-btn warning" onclick="downloadUnmatchedExcel()" style="width: 100%; padding: 15px 10px; font-size: 1em; font-weight: 600; white-space: nowrap; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                         💾 Combined Unmatched
                     </button>
                 </div>
@@ -1600,7 +1578,7 @@ function displayMergeSheetSelection(workbook, fileNum, fileName) {
         <h6 style="margin: 0 0 10px 0; color: #28a745;">Select Sheet for ${fileName}:</h6>
         <div style="display: flex; gap: 5px; flex-wrap: wrap;">`;
   workbook.SheetNames.forEach(name => {
-    html += `<button class="btn btn-sm" onclick="selectMergeSheet('${name}', ${fileNum})" style="font-size: 0.8em; padding: 5px 10px;">${name}</button>`;
+    html += `<button class="tool-action-btn secondary" onclick="selectMergeSheet('${name}', ${fileNum})" style="font-size: 0.8em; padding: 5px 10px;">${name}</button>`;
   });
   html += `</div></div>`;
   if (fileNum === 1) { mergeWorkbook1 = workbook; document.getElementById("mergeFile1Info").innerHTML = html; }
@@ -1664,7 +1642,7 @@ function mergeFiles() {
                     <option value="xlsx">Excel (XLSX) - High Quality</option>
                     <option value="csv">CSV - Light & Faster</option>
                 </select>
-                <button class="btn btn-success" onclick="downloadMergeResult()" style="background: #28a745; color: white; border: none; padding: 10px 20px; font-weight: 700; min-width: 250px;">📥 Download Merged File</button>
+                <button class="tool-action-btn success" onclick="downloadMergeResult()" style="background: #28a745; color: white; padding: 10px 20px; font-weight: 700; min-width: 250px;">📥 Download Merged File</button>
             </div>
         </div>`;
     document.getElementById("mergeResult").innerHTML = html;
@@ -1778,7 +1756,7 @@ function displaySanitizeSheetSelection(workbook) {
         <h6 style="margin: 0 0 15px 0; color: #e91e63; font-weight: 600;">📄 Select Sheet to Sanitize:</h6>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">`;
   workbook.SheetNames.forEach(name => {
-    html += `<button class="btn" onclick="selectSanitizeSheet('${name}')" style="padding: 12px 10px; text-align: center; font-size: 0.9em; background: #e91e63; color: white; border: none;">
+    html += `<button class="tool-action-btn danger" onclick="selectSanitizeSheet('${name}')" style="padding: 12px 10px; text-align: center; font-size: 0.9em; background: #e91e63; color: white;">
             📊 ${name}
         </button>`;
   });
@@ -1852,10 +1830,9 @@ function sanitizeCoordinates() {
                     <option value="xlsx">Excel (XLSX) - High Quality</option>
                     <option value="csv">CSV - Light & Faster</option>
                 </select>
-                <button class="btn" style="background: #e91e63; color: white; border: none; padding: 10px 20px; font-weight: 700; min-width: 250px;" onclick="downloadSanitizeResult()">📥 Download Cleaned File</button>
-                <button class="btn btn-secondary" style="padding: 10px 20px; font-weight: 700;" onclick="previewSanitizeData()">👁️ Preview Data</button>
+                <button class="tool-action-btn success" style="background: #e91e63; color: white; padding: 10px 20px; font-weight: 700; min-width: 250px;" onclick="downloadSanitizeResult()">📥 Download Cleaned File</button>
+                <button class="tool-action-btn secondary" style="padding: 10px 20px; font-weight: 700;" onclick="previewSanitizeData()">👁️ Preview Data</button>
             </div>
-            <div id="sanitizePreviewArea" style="margin-top: 15px; max-height: 400px; overflow: auto; display: none; border: 1px solid #f8bbd0; border-radius: 8px;"></div>
         </div>`;
     document.getElementById("sanitizeResult").innerHTML = html;
   };
@@ -1904,22 +1881,45 @@ function downloadSanitizeResult() {
   });
 }
 
+function showProcessingPreviewModal(titleText, contentHtml) {
+  const wrapperIds = [
+    'excelPreviewWrapper',
+    'geojsonPreviewWrapper',
+    'kmlPreviewWrapper',
+    'shpPreviewWrapper',
+    'gpxPreviewWrapper',
+    'processingPreviewWrapper'
+  ];
+
+  wrapperIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+
+  const previewTitle = document.getElementById('previewModalTitle');
+  const helper = document.getElementById('previewHelperText');
+  const previewResult = document.getElementById('processingPreviewResult');
+
+  if (previewTitle) previewTitle.textContent = titleText;
+  if (helper) helper.textContent = 'Preview the selected dataset here. Close this view when finished.';
+  if (previewResult) previewResult.innerHTML = contentHtml;
+
+  const processingWrapper = document.getElementById('processingPreviewWrapper');
+  if (processingWrapper) processingWrapper.style.display = 'block';
+
+  openModal('previewModal');
+}
+
 function previewSanitizeData() {
   if (!lastSanitizeResult) return;
-  const previewArea = document.getElementById("sanitizePreviewArea");
-  
-  if (previewArea.style.display === "block") {
-      previewArea.style.display = "none";
-      return;
-  }
 
   const headers = sanitizeData[0] || [];
-  let html = `<table style="width: 100%; border-collapse: collapse; background: white; font-size: 0.9em;">
+  let html = `<div style="overflow-x:auto; padding: 10px; background: #ffffff; border-radius: 10px;"><table style="width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.9em;">
       <thead style="position: sticky; top: 0; background: #e91e63; color: white;">
           <tr>`;
-  
+
   headers.forEach(h => {
-      html += `<th style="padding: 10px; border: 1px solid #f8bbd0; text-align: left;">${h}</th>`;
+      html += `<th style="padding: 12px; border: 1px solid #f8bbd0; text-align: left;">${h || ''}</th>`;
   });
   html += `</tr></thead><tbody>`;
 
@@ -1927,19 +1927,18 @@ function previewSanitizeData() {
   for (let i = 0; i < previewCount; i++) {
       html += `<tr style="background: ${i % 2 === 0 ? '#fafafa' : '#ffffff'};">`;
       lastSanitizeResult[i].forEach(cell => {
-          html += `<td style="padding: 8px 10px; border: 1px solid #fce4ec; border-bottom: 1px solid #f8bbd0;">${cell || ""}</td>`;
+          html += `<td style="padding: 10px; border: 1px solid #fce4ec;">${cell || ''}</td>`;
       });
       html += `</tr>`;
   }
-  
-  html += `</tbody></table>`;
-  
-  if (lastSanitizeResult.length > 50) {
-      html += `<div style="padding: 10px; text-align: center; background: #fff5f8; color: #e91e63; font-weight: bold; border-top: 1px solid #f8bbd0;">Showing top 50 rows of ${lastSanitizeResult.length} total rows</div>`;
-  }
 
-  previewArea.innerHTML = html;
-  previewArea.style.display = "block";
+  html += `</tbody></table>`;
+  if (lastSanitizeResult.length > 50) {
+      html += `<div style="padding: 12px; text-align: center; background: #fff5f8; color: #e91e63; font-weight: 700; border-top: 1px solid #f8bbd0;">Showing top 50 rows of ${lastSanitizeResult.length} total rows</div>`;
+  }
+  html += `</div>`;
+
+  showProcessingPreviewModal('Sanitized Data Preview', html);
 }
 
 function clearSanitizeData() {
@@ -1982,6 +1981,9 @@ window.handleSingleDelimChange = handleSingleDelimChange;
 window.previewSanitizeData = previewSanitizeData;
 window.downloadSanitizeResult = downloadSanitizeResult;
 window.clearSanitizeData = clearSanitizeData;
+window.showProcessingPreviewModal = showProcessingPreviewModal;
+window.viewDedupeDetails = viewDedupeDetails;
+window.viewSplitDetails = viewSplitDetails;
 window.downloadSplitExcel = downloadSplitExcel;
 
 // TOOL INFORMATION TOGGLE

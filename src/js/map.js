@@ -63,10 +63,6 @@ function initMap() {
     bufferLayer = new L.FeatureGroup();
     map.addLayer(bufferLayer);
 
-    // Initialize Convex Hull Layer
-    convexHullLayer = new L.FeatureGroup();
-    map.addLayer(convexHullLayer);
-
     // Initialize Global Imported Layers Group
     importedLayers = L.layerGroup().addTo(map);
 
@@ -89,8 +85,8 @@ function initMap() {
         poly: {
           allowIntersection: true,
         },
-        edit: true,
-        remove: true,
+        edit: false,
+        remove: false,
       },
       draw: {
         polygon: {
@@ -135,7 +131,7 @@ function initMap() {
 
     map.on("draw:drawstart", function (e) {
       // Ensure map is fully initialized before drawing starts
-      if (!map || !drawnItems || !measurementLayers || !bufferLayer || !convexHullLayer) {
+      if (!map || !drawnItems || !measurementLayers || !bufferLayer) {
         console.warn("⚠️ Drawing attempted before full initialization. This should not happen.");
         // This is a safety check - the drawing toolbar shouldn't be accessible if map isn't ready
         return;
@@ -190,6 +186,7 @@ function initMap() {
         container.style.gap = "5px";
         container.style.boxShadow = "0 1px 5px rgba(0,0,0,0.4)";
         container.style.borderRadius = "5px";
+        container.style.marginTop = "92px";
 
         const createButton = (html, title, onClick) => {
           const btn = L.DomUtil.create("a", "", container);
@@ -228,9 +225,7 @@ function initMap() {
           }
         }).id = "btnBuffer";
 
-        createButton("🛡️", "Generate Convex Hull (Boundary)", () =>
-          toggleConvexHull(),
-        ).id = "btnConvexHull";
+        // Convex Hull tool removed from current UI per simplified map controls.
         // createButton("🏷️", "Toggle Site Labels", () => toggleLabels()).id =
         //   "btnToggleLabels";
 
@@ -448,10 +443,6 @@ function initMap() {
             bufferLayer = new L.FeatureGroup();
             map.addLayer(bufferLayer);
           }
-          if (!convexHullLayer) {
-            convexHullLayer = new L.FeatureGroup();
-            map.addLayer(convexHullLayer);
-          }
         }
 
         console.log("📊 Shapes BEFORE adding:", drawnItems.getLayers().length);
@@ -595,27 +586,8 @@ function initMap() {
     // Confirm successful initialization
     console.log("✅ Map initialized successfully");
 
-    // Initial stats update
-    updateMapStats();
-
-    // Stats event listeners
-    map.on("zoomend", updateMapStats);
-
-    const zoomInput = document.getElementById("statZoomLevelInput");
-    if (zoomInput) {
-      zoomInput.addEventListener("change", (e) => {
-        const val = parseInt(e.target.value);
-        if (!isNaN(val) && val >= 1 && val <= 22) {
-          map.setZoom(val);
-        } else {
-          e.target.value = map.getZoom();
-        }
-      });
-      // Prevent scrolling the dashboard from changing zoom unless focused
-      zoomInput.addEventListener("wheel", (e) => {
-        if (document.activeElement !== zoomInput) e.preventDefault();
-      });
-    }
+    // Initial map setup
+    // Map stats panel has been removed, so no dashboard updates are required.
   } catch (error) {
     console.error("❌ CRITICAL: Error initializing map:", error);
     console.error("   Error message:", error.message);
@@ -996,7 +968,7 @@ function displaySelectedMarkersPanel(selectedMarkersArray, layer, selectedFeatur
 }
 
 function buildAttributeTable(data, type, totalCount, featureType = 'point') {
-  let tableHTML = '<div style="overflow: auto; flex: 1; padding: 8px;">';
+  let tableHTML = '<div style="overflow-y: auto; flex: 1; padding: 8px; display: flex; flex-direction: column;">';
 
   const itemsToDisplay = type === 'Points' ? data.filter(d => d.getLatLng) : data;
 
@@ -1016,10 +988,10 @@ function buildAttributeTable(data, type, totalCount, featureType = 'point') {
     });
     const additionalColumns = Array.from(allKeys);
 
-    tableHTML += '<table style="width: 100%; border-collapse: collapse; font-size: 11px;">';
-    tableHTML += '<thead style="position: sticky; top: 0; background: #764ba2; color: white; border-bottom: 2px solid #512da8; z-index: 1;">';
+    tableHTML += '<table style="width: 100%; border-collapse: collapse; font-size: 11px; flex-shrink: 0;">';
+    tableHTML += '<thead style="position: sticky; top: 0; background: #764ba2; color: white; border-bottom: 2px solid #512da8; z-index: 10;">';
     tableHTML += "<tr>";
-    tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white; position: sticky; left: 0; z-index: 2;">#</th>';
+    tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white; position: sticky; left: 0; z-index: 11;">#</th>';
 
     if (featureType === 'point') {
       tableHTML += '<th style="padding: 8px; text-align: left; border: 1px solid #512da8; font-weight: 700; background: #764ba2; color: white;">Latitude</th>';
@@ -1640,9 +1612,6 @@ function clearDrawings() {
   if (bufferLayer) {
     bufferLayer.clearLayers();
   }
-  if (convexHullLayer) {
-    convexHullLayer.clearLayers();
-  }
 
   // Close selected markers panel and reset selection
   const panel = document.getElementById("selectedMarkersPanel");
@@ -1680,7 +1649,6 @@ function updateGISToolUI() {
   const btnDist = document.getElementById("btnMeasureDist");
   const btnArea = document.getElementById("btnMeasureArea");
   const btnBuffer = document.getElementById("btnBuffer");
-  const btnHull = document.getElementById("btnConvexHull");
   const btnLabels = document.getElementById("btnToggleLabels");
 
   const activeColor = "#e3f2fd"; // Light blue active background
@@ -1692,69 +1660,10 @@ function updateGISToolUI() {
   if (btnArea)
     btnArea.style.backgroundColor =
       activeMeasurementMode === "area" ? activeColor : defaultColor;
-  if (btnHull)
-    btnHull.style.backgroundColor = isConvexHullActive
-      ? activeColor
-      : defaultColor;
   if (btnLabels)
     btnLabels.style.backgroundColor = isLabelsActive
       ? activeColor
       : defaultColor;
-}
-
-function toggleConvexHull() {
-  // Ensure map is initialized
-  if (!map) {
-    console.warn("⚠️ Map not initialized on toggleConvexHull, initializing now");
-    initMap();
-  }
-
-  if (!convexHullLayer) {
-    console.warn("⚠️ convexHullLayer not initialized, creating now");
-    convexHullLayer = new L.FeatureGroup();
-    map.addLayer(convexHullLayer);
-  }
-
-  if (!window.turf) return;
-
-  if (isConvexHullActive) {
-    if (convexHullLayer) convexHullLayer.clearLayers();
-    isConvexHullActive = false;
-    updateGISToolUI();
-    return;
-  }
-
-  if (markers.length < 3) {
-    alert("Need at least 3 points to generate a convex hull.");
-    return;
-  }
-
-  const points = markers.map((m) => [m.getLatLng().lng, m.getLatLng().lat]);
-  const featureCollection = turf.featureCollection(
-    points.map((p) => turf.point(p)),
-  );
-  const hull = turf.convex(featureCollection);
-
-  if (hull) {
-    if (convexHullLayer) {
-      convexHullLayer.clearLayers();
-      L.geoJSON(hull, {
-        style: {
-          color: "#9b59b6",
-          weight: 3,
-          opacity: 0.8,
-          fillColor: "#9b59b6",
-          fillOpacity: 0.1,
-        },
-      }).addTo(convexHullLayer);
-    }
-    isConvexHullActive = true;
-    updateGISToolUI();
-  } else {
-    alert(
-      "Could not generate boundary. Ensure points are not in a straight line.",
-    );
-  }
 }
 
 function toggleLabels() {
@@ -2098,16 +2007,28 @@ function loadMapLayer(layerType) {
     maxZoom: 19,
   }).addTo(map);
   currentMapLayer = layerType;
-  document.querySelectorAll("[data-layer]").forEach((btn) => {
-    btn.classList.remove("active");
-    btn.style.border = "1px solid #ddd";
+  const layerButtons = document.querySelectorAll('.map-layer-btn[data-layer]');
+  layerButtons.forEach((button) => {
+    const isActive = button.dataset.layer === layerType;
+    button.classList.toggle('active', isActive);
   });
-  const activeBtn = document.querySelector(`[data-layer="${layerType}"]`);
-  if (activeBtn) {
-    activeBtn.classList.add("active");
-    activeBtn.style.borderColor = "#667eea";
-    activeBtn.style.borderWidth = "2px";
-  }
+  updateMapLayerToggle(layerType);
+}
+
+function updateMapLayerToggle(layerType) {
+  const layerInfo = {
+    openstreetmap: { icon: '🌐', label: 'Street Map' },
+    google: { icon: '🌍', label: 'Google Maps' },
+    satellite: { icon: '🛰️', label: 'Satellite' },
+    terrain: { icon: '⛰️', label: 'Terrain' },
+    esri: { icon: '🏞️', label: 'ESRI Terrain' }
+  };
+
+  const info = layerInfo[layerType] || layerInfo.openstreetmap;
+  const iconEl = document.getElementById('mapLayerToggleIcon');
+  const labelEl = document.getElementById('mapLayerToggleLabel');
+  if (iconEl) iconEl.textContent = info.icon;
+  if (labelEl) labelEl.textContent = info.label;
 }
 
 function changeMapLayer(layerType) {
@@ -2116,6 +2037,21 @@ function changeMapLayer(layerType) {
     return;
   }
   loadMapLayer(layerType);
+}
+
+function selectMapLayer(layerType) {
+  changeMapLayer(layerType);
+  const picker = document.getElementById('mapLayerPicker');
+  if (picker) {
+    picker.classList.remove('open');
+  }
+}
+
+function toggleMapLayerMenu() {
+  const picker = document.getElementById('mapLayerPicker');
+  if (picker) {
+    picker.classList.toggle('open');
+  }
 }
 
 function addMarker(lat, lng, popup) {
@@ -2134,74 +2070,8 @@ function addMarker(lat, lng, popup) {
 }
 
 function updateMapStats() {
-  const statsDashboard = document.getElementById("mapStatsDashboard");
-  if (!statsDashboard) return;
-
-  const locElem = document.getElementById("statTotalLocations");
-  const shapeElem = document.getElementById("statTotalShapes");
-  const polyElem = document.getElementById("countPolygon");
-  const rectElem = document.getElementById("countRectangle");
-  const circElem = document.getElementById("countCircle");
-  const zoomInput = document.getElementById("statZoomLevelInput");
-
-  // Animation helper
-  const animateUpdate = (elem, val) => {
-    const currentVal = elem.tagName === 'INPUT' ? elem.value : elem.innerText;
-    if (currentVal != val) {
-      if (elem.tagName === 'INPUT') {
-        elem.value = val;
-      } else {
-        elem.innerText = val;
-      }
-      elem.classList.remove("stat-updated");
-      void elem.offsetWidth; // Trigger reflow
-      elem.classList.add("stat-updated");
-    }
-  };
-
-  // Update logic
-  let totalPoints = markers.length;
-  let polyCount = 0, rectCount = 0, circCount = 0, lineCount = 0;
-
-  // 1. Count from Markers (Points)
-  if (locElem) animateUpdate(locElem, totalPoints);
-
-  // 2. Count from Drawn Items
-  if (drawnItems) {
-    const layers = drawnItems.getLayers();
-    layers.forEach(layer => {
-      if (layer instanceof L.Rectangle) rectCount++;
-      else if (layer instanceof L.Polygon) polyCount++;
-      else if (layer instanceof L.Circle) circCount++;
-      else if (layer instanceof L.Polyline) lineCount++;
-    });
-  }
-
-  // 3. Count from Imported Layers (Vector data)
-  if (importedLayers) {
-    importedLayers.eachLayer(layer => {
-      // Avoid double counting markers already in markers array
-      if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
-        if (!markers.includes(layer)) {
-          // This might be a marker from importedLayers that isn't in markers array
-          // totalPoints++; // Optional: Decide if these should be in "Total Locations"
-        }
-      } else if (layer instanceof L.Rectangle) {
-        rectCount++;
-      } else if (layer instanceof L.Polygon) {
-        polyCount++;
-      } else if (layer instanceof L.Polyline) {
-        lineCount++;
-      }
-    });
-  }
-
-  if (shapeElem) animateUpdate(shapeElem, polyCount + rectCount + circCount + lineCount);
-  if (polyElem) animateUpdate(polyElem, polyCount);
-  if (rectElem) animateUpdate(rectElem, rectCount);
-  if (circElem) animateUpdate(circElem, circCount);
-
-  if (zoomInput && map) animateUpdate(zoomInput, map.getZoom());
+  // Map stats panel has been removed. Keep this function for backward compatibility
+  // if any remaining map logic still calls it.
 }
 
 function clearMapMarkers() {
@@ -2216,7 +2086,6 @@ function clearMapMarkers() {
   if (importedLayers) importedLayers.clearLayers();
   if (measurementLayers) measurementLayers.clearLayers();
   if (bufferLayer) bufferLayer.clearLayers();
-  if (convexHullLayer) convexHullLayer.clearLayers();
   updateMapStats();
 }
 
@@ -2906,9 +2775,8 @@ async function exportMapToPDF() {
     let resolutionScale = 3;
     const resSettings = document.getElementById("pdfResolution");
     if (resSettings) {
-      resolutionScale = parseInt(resSettings.value) || 3;
+      resolutionScale = parseInt(resSettings.value, 10) || 3;
     }
-
     const mapContainer = document.getElementById("mapContainer");
     const canvas = await html2canvas(mapContainer, {
       useCORS: true,
@@ -3323,7 +3191,6 @@ function diagnosisMapInit() {
   console.log("   drawnItems:", drawnItems ? `✅ Created (${drawnItems.getLayers().length} shapes)` : "❌ NULL");
   console.log("   measurementLayers:", measurementLayers ? `✅ Created` : "❌ NULL");
   console.log("   bufferLayer:", bufferLayer ? `✅ Created` : "❌ NULL");
-  console.log("   convexHullLayer:", convexHullLayer ? `✅ Created` : "❌ NULL");
   console.log("   markerClusterGroup:", markerClusterGroup ? `✅ Created` : "❌ NULL");
 
   console.log("\n🎨 Draw Control:");
@@ -3338,7 +3205,6 @@ function diagnosisMapInit() {
   console.log("   isClusteringEnabled:", isClusteringEnabled);
   console.log("   isHeatmapEnabled:", isHeatmapEnabled);
   console.log("   activeMeasurementMode:", activeMeasurementMode);
-  console.log("   isConvexHullActive:", isConvexHullActive);
   console.log("   isLabelsActive:", isLabelsActive);
 
   console.log("\n=== END DIAGNOSIS ===\n");
@@ -3368,11 +3234,12 @@ window.exportToGeoJSON = exportToGeoJSON;
 window.exportToJSON = exportToJSON;
 window.exportToShp = exportToShp;
 window.exportMapToPDF = exportMapToPDF;
+window.selectMapLayer = selectMapLayer;
+window.toggleMapLayerMenu = toggleMapLayerMenu;
 window.clearDrawings = clearDrawings;
 window.finishDrawing = finishDrawing;
 window.toggleMeasurement = toggleMeasurement;
 window.applyBuffer = applyBuffer;
-window.toggleConvexHull = toggleConvexHull;
 window.toggleLabels = toggleLabels;
 window.changeMarkerSize = changeMarkerSize;
 window.unhighlightMarkers = unhighlightMarkers;

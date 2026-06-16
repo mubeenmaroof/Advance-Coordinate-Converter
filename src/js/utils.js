@@ -1,5 +1,32 @@
 // Utility functions shared across components
 
+// Validate file size before processing (max 50MB default)
+function validateFileSize(file, maxSizeMB) {
+  if (!maxSizeMB) maxSizeMB = 50;
+  var maxBytes = maxSizeMB * 1024 * 1024;
+  if (file.size > maxBytes) {
+    if (typeof showToast === 'function') {
+      showToast("File " + file.name + " exceeds " + maxSizeMB + "MB limit. Please use a smaller file.", "error");
+    } else {
+      alert("File " + file.name + " exceeds " + maxSizeMB + "MB limit.");
+    }
+    return false;
+  }
+  return true;
+}
+
+// Check if existing data should prevent new uploads
+function checkExistingData() {
+  // Check if any file data is currently loaded
+  if (window.excelData && window.excelData.length > 0) return true;
+  if (window.currentGeoJsonData) return true;
+  if (window.currentKmlData) return true;
+  if (window.currentShpData) return true;
+  if (window.currentGpxData) return true;
+  return false;
+}
+window.checkExistingData = checkExistingData;
+
 function parseDMS(dmsString) {
   const dmsPattern = /(\d+)°(\d+)'([\d.]+)"([NSEW])/;
   const match = dmsString.match(dmsPattern);
@@ -342,48 +369,44 @@ function refreshPage() {
 }
 window.refreshPage = refreshPage;
 
+// showToast is defined in helper.js (final loaded script) for the new dashboard.
+// This early-boot fallback ensures toast works even before helper.js loads.
 function showToast(message, type = "info") {
-  // Create toast notification
+  const container = document.getElementById("toastContainer");
+  if (container) {
+    // Use the helper.js style if container exists
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    const icons = { success: "✅", error: "❌", warning: "⚠️", info: "ℹ️" };
+    toast.innerHTML = `<span>${icons[type] || "✅"}</span> ${message}`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(50px)";
+      toast.style.transition = "all 0.3s ease-in";
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
+    return;
+  }
+  
+  // Fallback: create a temporary inline toast if container doesn't exist yet
   const toast = document.createElement("div");
-  toast.className = "toast-notification";
   toast.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    max-width: 400px;
+    position: fixed; bottom: 20px; left: 20px; max-width: 400px;
     padding: 16px 20px;
     background: ${type === "success" ? "#4caf50" : type === "error" ? "#f44336" : type === "warning" ? "#ff9800" : "#2196f3"};
-    color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    z-index: 9999;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    animation: slideInLeft 0.3s ease-out;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border-left: 5px solid rgba(0,0,0,0.2);
+    color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999; font-family: Arial, sans-serif; font-size: 14px;
+    font-weight: 500; display: flex; align-items: center; gap: 12px;
+    border-left: 5px solid rgba(0,0,0,0.2); animation: slideInLeft 0.3s ease-out;
   `;
-
-  const icon = document.createElement("span");
-  icon.innerHTML = type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️";
-  icon.style.fontSize = "18px";
-
-  const text = document.createElement("span");
-  text.innerText = message;
-
-  toast.appendChild(icon);
-  toast.appendChild(text);
+  toast.innerHTML = `${type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️"} ${message}`;
   document.body.appendChild(toast);
-
-  // Auto remove after 4 seconds
   setTimeout(() => {
-    toast.style.animation = "slideOutLeft 0.3s ease-out forwards";
-    setTimeout(() => {
-      if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 300);
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(50px)";
+    toast.style.transition = "all 0.3s ease-in";
+    setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
 
@@ -394,3 +417,10 @@ window.formatDMS = formatDMS;
 window.isDMS = isDMS;
 window.extractCoordinates = extractCoordinates;
 window.pairCoordinates = pairCoordinates;
+window.normalizeCoordinates = normalizeCoordinates;
+window.parseCSV = parseCSV;
+window.validateFileSize = validateFileSize;
+window.getExportOptionsHTML = getExportOptionsHTML;
+window.getRepresentativePoint = getRepresentativePoint;
+window.handleGenericExport = handleGenericExport;
+window.refreshPage = refreshPage;

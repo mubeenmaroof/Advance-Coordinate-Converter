@@ -436,6 +436,92 @@ function deletePreset(index) {
   }
 }
 
+// ── CRS Conversion Functions ─────────────────────────────────────────
+// Convert EPSG:4326 (lat/lon) to EPSG:3857 (Web Mercator)
+function convertEPSG4326toEPSG3857(lat, lon) {
+  const EARTHRADIUS = 20037508.34;
+  let x = lon * EARTHRADIUS / 180;
+  let y = Math.log(Math.tan((90 + lat) * Math.PI / 360)) * EARTHRADIUS / Math.PI;
+  return [x.toFixed(currentPrecision), y.toFixed(currentPrecision)];
+}
+
+// Convert EPSG:3857 (Web Mercator) to EPSG:4326 (lat/lon)
+function convertEPSG3857toEPSG4326(x, y) {
+  const EARTHRADIUS = 20037508.34;
+  let lon = x * 180 / EARTHRADIUS;
+  let lat = (2 * Math.atan(Math.exp(y * Math.PI / EARTHRADIUS)) - Math.PI / 2) * 180 / Math.PI;
+  return [lat.toFixed(currentPrecision), lon.toFixed(currentPrecision)];
+}
+
+// Apply CRS conversion based on source and target inputs
+function applyCRSConversion(lat, lon) {
+  const sourceEPSG = document.getElementById("crsSource")?.value || "EPSG:4326";
+  const targetEPSG = document.getElementById("crsTarget")?.value || "EPSG:3857";
+  
+  lat = parseFloat(lat);
+  lon = parseFloat(lon);
+  
+  if (isNaN(lat) || isNaN(lon)) {
+    return null;
+  }
+  
+  // Same CRS - no conversion needed
+  if (sourceEPSG === targetEPSG) {
+    return [lat.toFixed(currentPrecision), lon.toFixed(currentPrecision)];
+  }
+  
+  // 4326 to 3857
+  if (sourceEPSG === "EPSG:4326" && targetEPSG === "EPSG:3857") {
+    return convertEPSG4326toEPSG3857(lat, lon);
+  }
+  
+  // 3857 to 4326
+  if (sourceEPSG === "EPSG:3857" && targetEPSG === "EPSG:4326") {
+    return convertEPSG3857toEPSG4326(lon, lat);
+  }
+  
+  // Unsupported CRS conversion
+  console.warn(`CRS conversion from ${sourceEPSG} to ${targetEPSG} not supported`);
+  return null;
+}
+
+// Test CRS conversion from UI inputs
+function testCRSConversion() {
+  const lat = document.getElementById("testLatInput")?.value.trim();
+  const lon = document.getElementById("testLonInput")?.value.trim();
+  const resultDiv = document.getElementById("crsConversionResult");
+  
+  if (!lat || !lon) {
+    resultDiv.innerHTML = '<div class="error">Please enter both latitude and longitude</div>';
+    return;
+  }
+  
+  const result = applyCRSConversion(lat, lon);
+  if (!result) {
+    resultDiv.innerHTML = '<div class="error">CRS conversion failed. Check your inputs.</div>';
+    return;
+  }
+  
+  const sourceEPSG = document.getElementById("crsSource")?.value || "EPSG:4326";
+  const targetEPSG = document.getElementById("crsTarget")?.value || "EPSG:3857";
+  
+  resultDiv.innerHTML = `
+    <div class="result" style="margin-top: 15px;">
+      <h3>✅ CRS Conversion Result</h3>
+      <div style="background: white; padding: 15px; border-radius: 8px; border: 2px solid #667eea;">
+        <p style="margin: 0 0 8px 0; font-weight: 600; color: #666;">Source: ${sourceEPSG}</p>
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; margin-bottom: 12px;">
+          Latitude: ${lat}<br>Longitude: ${lon}
+        </div>
+        <p style="margin: 0 0 8px 0; font-weight: 600; color: #666;">Target: ${targetEPSG}</p>
+        <div style="background: #e7f3ff; padding: 10px; border-radius: 5px; font-family: monospace; color: #0066cc; font-weight: 600;">
+          Coordinate 1: ${result[0]}<br>Coordinate 2: ${result[1]}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // initialization
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
@@ -458,6 +544,10 @@ window.showBatchOnMap = showBatchOnMap;
 window.removeDuplicates = removeDuplicates;
 window.applyFilters = applyFilters;
 window.displayProcessedData = displayProcessedData;
+window.convertEPSG4326toEPSG3857 = convertEPSG4326toEPSG3857;
+window.convertEPSG3857toEPSG4326 = convertEPSG3857toEPSG4326;
+window.applyCRSConversion = applyCRSConversion;
+window.testCRSConversion = testCRSConversion;
 window.addToHistory = addToHistory;
 window.loadHistory = loadHistory;
 window.useHistoryItem = useHistoryItem;

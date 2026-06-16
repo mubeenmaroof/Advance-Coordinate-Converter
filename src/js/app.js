@@ -60,14 +60,22 @@ function initializeApp() {
 
 function showWelcomeModal() {
   const modal = document.getElementById("welcomeModal");
-  if (modal) {
-    // Show modal on startup
-    modal.style.display = "flex";
-  }
+  if (!modal) return;
+  if (localStorage.getItem("suppressWelcomeModal") === "true") return;
+  modal.style.display = "flex";
+  modal.style.opacity = "0";
+  requestAnimationFrame(() => {
+    modal.style.transition = "opacity 0.25s ease-out";
+    modal.style.opacity = "1";
+  });
 }
 
 function closeWelcomeModal() {
   const modal = document.getElementById("welcomeModal");
+  const suppressCheckbox = document.getElementById("welcomeDoNotShow");
+  if (suppressCheckbox?.checked) {
+    localStorage.setItem("suppressWelcomeModal", "true");
+  }
   if (modal) {
     modal.style.opacity = "0";
     modal.style.transition = "opacity 0.3s ease";

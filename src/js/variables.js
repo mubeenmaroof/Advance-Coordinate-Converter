@@ -1,41 +1,39 @@
 // Global state variables used across components
-let batchResults = [];
-let excelData = null;
-let detectedColumns = [];
-let map = null;
-let markers = [];
-let currentPrecision = 6;
-let conversionHistory = JSON.parse(
+var batchResults = [];
+var excelData = null;
+var detectedColumns = [];
+var map = null;
+var markers = [];
+var currentPrecision = 6;
+var conversionHistory = JSON.parse(
   localStorage.getItem("conversionHistory") || "[]",
 );
-let savedPresets = JSON.parse(localStorage.getItem("savedPresets") || "[]");
-let coordinateDataStore = [];
-let currentMarkerStyle = "numbered";
-let currentMarkerSize = 35;
-let currentMapLayer = "openstreetmap";
-let tileLayer = null;
+var savedPresets = JSON.parse(localStorage.getItem("savedPresets") || "[]");
+var coordinateDataStore = [];
+var currentMarkerStyle = "numbered";
+var currentMarkerSize = 35;
+var currentMapLayer = "openstreetmap";
+var tileLayer = null;
 
 // Advanced GIS Global State
-let markerClusterGroup = null;
-let isClusteringEnabled = false;
-let heatLayer = null;
-let isHeatmapEnabled = false;
-let drawnItems = null;
-let drawControl = null;
-let routePolyline = null;
-let activeMeasurementMode = null; // null, 'distance', 'area'
-let measurementLayers = null;
-let tempMeasurementPoints = [];
-let bufferLayer = null;
-let convexHullLayer = null;
-let isConvexHullActive = false;
-let isLabelsActive = false;
-let selectedMarkers = [];
-let selectedFeatures = { points: [], lines: [], polygons: [] };
-let lastSelectionLayer = null;
+var markerClusterGroup = null;
+var isClusteringEnabled = false;
+var heatLayer = null;
+var isHeatmapEnabled = false;
+var drawnItems = null;
+var drawControl = null;
+var routePolyline = null;
+var activeMeasurementMode = null; // null, 'distance', 'area'
+var measurementLayers = null;
+var tempMeasurementPoints = [];
+var bufferLayer = null;
+var isLabelsActive = false;
+var selectedMarkers = [];
+var selectedFeatures = { points: [], lines: [], polygons: [] };
+var lastSelectionLayer = null;
 
 // Shape colors for multiple polygons/rectangles/circles
-let shapeColors = [
+var shapeColors = [
   "#FF6B6B", // Red
   "#4ECDC4", // Teal
   "#45B7D1", // Blue
@@ -67,55 +65,66 @@ let shapeColors = [
   "#9370DB", // Medium Purple
   "#3CB371", // Medium Sea Green
 ];
-let currentShapeColorIndex = 0;
-let drawnShapesInfo = []; // Track info about drawn shapes
+var currentShapeColorIndex = 0;
+var drawnShapesInfo = []; // Track info about drawn shapes
 
 // Variables for other tools
-let dedupeData = [];
-let dedupeSelectedColumns = [];
-let dedupeWorkbook = null;
-let dedupeSelectedSheet = null;
+var dedupeData = [];
+var dedupeSelectedColumns = [];
+var dedupeWorkbook = null;
+var dedupeSelectedSheet = null;
 
-let splitData = [];
-let splitSelectedColumn = null;
-let splitWorkbook = null;
-let splitSelectedSheet = null;
+var splitData = [];
+var splitSelectedColumn = null;
+var splitWorkbook = null;
+var splitSelectedSheet = null;
 
-let comparisonData1 = null;
-let comparisonData2 = null;
-let comparisonFile1Name = "";
-let comparisonFile2Name = "";
-let lastComparisonResults = null;
-let lastSelectedCols1 = null;
-let lastSelectedCols2 = null;
-let comparisonWorkbook1 = null;
-let comparisonWorkbook2 = null;
+var comparisonData1 = null;
+var comparisonData2 = null;
+var comparisonFile1Name = "";
+var comparisonFile2Name = "";
+var lastComparisonResults = null;
+var lastSelectedCols1 = null;
+var lastSelectedCols2 = null;
+var comparisonWorkbook1 = null;
+var comparisonWorkbook2 = null;
 
-let googleSheetData = [];
-let googleSheetWorkbook = null;
-let googleSheetSelectedSheet = null;
+var googleSheetData = [];
+var googleSheetWorkbook = null;
+var googleSheetSelectedSheet = null;
 
 // Geocoding Variables
-let geocodingData = [];
-let geocodingWorkbook = null;
-let geocodingSelectedSheet = null;
-let geocodingSelectedColumn = null;
-let isGeocodingCancelled = false;
+var geocodingData = [];
+var geocodingWorkbook = null;
+var geocodingSelectedSheet = null;
+var geocodingSelectedColumn = null;
+var isGeocodingCancelled = false;
 
 // GeoJSON Variables
-let currentGeoJsonData = null;
-let geoJsonCoordinateStore = [];
+var currentGeoJsonData = null;
+var geoJsonCoordinateStore = [];
 
 // KML/KMZ Variables
-let currentKmlData = null;
-let kmlCoordinateStore = [];
+var currentKmlData = null;
+var kmlCoordinateStore = [];
 
 // Shapefile Variables
-let currentShpData = null;
-let shpCoordinateStore = [];
+var currentShpData = null;
+var shpCoordinateStore = [];
+
+// GPX Variables
+var currentGpxData = null;
+var gpxCoordinateStore = [];
 
 // Global Layer Groups for GIS Export/Management
-let importedLayers = null; // Will be initialized as L.layerGroup() in map.js
+var importedLayers = null; // Will be initialized as L.layerGroup() in map.js
 
+
+// ── Map Layer Visibility Tracking ────────────────────────────────────
+// Tracks which uploaded files are currently visible on the map.
+// Keys are composite strings: "type::fileName" (e.g. "gpx::mytrack.gpx")
+// Value is a layer group or null (if just a marker-based toggle)
+var mapVisibleLayers = {};
+var mapLayerVisibilityFlags = {}; // { "type::fileName": true|false }
 
 // the following DOM listeners are moved to their respective modules (dedupe/split/comparison etc)

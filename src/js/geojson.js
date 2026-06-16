@@ -9,24 +9,29 @@ let jsonMappingState = {
   selectedLng: ""
 };
 
+// Initialize global data storage for multiple GeoJSON files
+if (!window.currentGeoJsonDataByName) {
+  window.currentGeoJsonDataByName = {};
+}
+
 function handleGeoJsonUpload(event) {
-  if (window.checkExistingData && window.checkExistingData()) {
-    event.target.value = '';
-    return;
-  }
   console.log("📁 GeoJSON file upload triggered", event);
-  const file = event.target.files[0];
+  const files = event.target.files;
 
-  if (!file) return;
+  if (!files || files.length === 0) return;
 
-  if (validateFileSize(file)) {
-    const clearBtnRow = document.getElementById("geoJsonClearBtnGroup");
-    if (clearBtnRow) clearBtnRow.style.display = "block";
+  const clearBtnRow = document.getElementById("geoJsonClearBtnGroup");
+  if (clearBtnRow) clearBtnRow.style.display = "block";
+
+  // Process each file
+  Array.from(files).forEach(file => {
     handleGeoJsonFile(file);
-  }
+  });
 }
 
 function handleGeoJsonFile(file) {
+  if (typeof validateFileSize === 'function' && !validateFileSize(file)) return;
+
   const reader = new FileReader();
   reader.onload = function (e) {
     try {
@@ -46,31 +51,49 @@ function handleGeoJsonFile(file) {
     } catch (error) {
       console.error("❌ Error parsing JSON:", error);
       hideProcessingOverlay();
-      document.getElementById("geoJsonResult").innerHTML =
-        `<div class="error">Error reading file: ${error.message}</div>`;
+      const resultDiv = document.getElementById("geoJsonResult");
+      if (resultDiv) {
+        resultDiv.innerHTML =
+          `<div class="error">Error reading file: ${error.message}</div>`;
+      }
+      if (typeof showToast === 'function') {
+        showToast(`Error reading GeoJSON/JSON: ${error.message}`, "error");
+      }
     }
   };
-  showProcessingOverlay("Loading JSON Data...");
+  reader.onerror = function () {
+    hideProcessingOverlay();
+    if (typeof showToast === 'function') {
+      showToast(`Failed to read file: ${file.name}`, "error");
+    }
+  };
+  showProcessingOverlay("Loading JSON Data...", 0);
   reader.readAsText(file);
 }
 
 function processGeoJsonData(jsonData, fileName) {
   const resultDiv = document.getElementById("geoJsonResult");
-
-  // Reset previous state
-  currentGeoJsonData = jsonData;
-  geoJsonCoordinateStore = [];
+  let coordinates = [];
 
   // Standard GeoJSON detection
   if (jsonData.type === "FeatureCollection" || (jsonData.type === "Feature" && jsonData.geometry)) {
     if (jsonData.type === "FeatureCollection") {
-      geoJsonCoordinateStore = extractCoordinatesFromGeoJson(jsonData);
+      coordinates = extractCoordinatesFromGeoJson(jsonData);
     } else {
-      geoJsonCoordinateStore = extractCoordinatesFromFeature(jsonData);
+      coordinates = extractCoordinatesFromFeature(jsonData);
     }
 
-    if (geoJsonCoordinateStore.length > 0) {
-      renderJsonSuccessUI(fileName, "Standard GeoJSON", geoJsonCoordinateStore.length);
+    if (coordinates.length > 0) {
+      // Store in the multi-file object using filename as key
+      window.currentGeoJsonDataByName = window.currentGeoJsonDataByName || {};
+      window.currentGeoJsonDataByName[fileName] = jsonData;
+      window.currentGeoJsonDataByName[fileName]._sourceFileName = fileName;
+
+      // Keep backward compatibility
+      currentGeoJsonData = jsonData;
+      geoJsonCoordinateStore = coordinates;
+
+      renderJsonSuccessUI(fileName, "Standard GeoJSON", coordinates.length);
       return;
     }
   }
@@ -275,11 +298,16 @@ function renderJsonSuccessUI(fileName, format, count) {
   const resultDiv = document.getElementById("geoJsonResult");
   const clearBtn = document.getElementById("geoJsonClearBtnGroup");
   if (clearBtn) clearBtn.style.display = "block";
-  
+
+  // Show toast notification
+  if (typeof showToast === 'function') {
+    showToast(`✓ Loaded: ${fileName} (${count} features)`, "success");
+  }
+
   // Discover all unique property keys
   const propertyKeys = new Set();
   const geomTypes = new Set();
-  
+
   geoJsonCoordinateStore.forEach(c => {
     if (c.properties) {
       Object.keys(c.properties).forEach(key => {
@@ -288,10 +316,10 @@ function renderJsonSuccessUI(fileName, format, count) {
     }
     if (c.geometryType) geomTypes.add(c.geometryType);
   });
-  
+
   const sortedKeys = Array.from(propertyKeys).sort();
   const displayCount = Math.min(count, 10);
-  
+
   let html = `
     <div class="result-card" style="animation: fadeIn 0.5s ease-out;">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
@@ -345,14 +373,14 @@ function renderJsonSuccessUI(fileName, format, count) {
       <div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #667eea; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
         <label style="font-weight: 700; font-size: 0.9em; color: #667eea;">Export Format:</label>
         ${getExportOptionsHTML(fileName.endsWith('.json') ? 'json' : 'geojson', 'geoJsonExportFormat')}
-        <div style="display: flex; gap: 10px;">
-          <button class="btn" onclick="downloadGeoJsonResults()" style="background: #667eea; color: white; border: none; padding: 10px 20px; font-weight: 700;">📥 Download Results</button>
-          <button class="btn btn-primary" onclick="showGeoJsonOnMap()" style="padding: 10px 20px; font-weight: 700;">📍 Show on Map</button>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="tool-action-btn secondary" onclick="downloadGeoJsonResults()">📥 Download Results</button>
+          <button class="tool-action-btn success" onclick="showGeoJsonOnMap()">📍 Show on Map</button>
         </div>
       </div>
     </div>
   `;
-  
+
   resultDiv.innerHTML = html;
 }
 
@@ -375,7 +403,7 @@ function extractCoordinatesFromFeature(feature, featureIndex = 0, globalStartInd
 
   // Standardize: Use ONE representative point per feature for the preview UI and store
   const repPoint = getRepresentativePoint(geometry);
-  
+
   if (repPoint) {
     const propsWithId = { ...properties };
     if (!propsWithId['ObjectID']) {
@@ -427,19 +455,19 @@ function showGeoJsonOnMap() {
   setTimeout(() => {
     if (!map) initMap();
     else map.invalidateSize();
-    
+
     clearMapMarkers();
 
     // Add Standard GeoJSON layer if available
     if (currentGeoJsonData && currentGeoJsonData.type === "FeatureCollection") {
       const renderer = L.canvas({ padding: 0.5 });
-      
+
       const geoLayer = L.geoJSON(currentGeoJsonData, {
         renderer: renderer,
         onEachFeature: function (feature, layer) {
           // Store the feature data on the layer for selection purposes
           layer.feature = feature;
-          
+
           if (feature.properties) {
             const props = { ...feature.properties };
             if (feature.geometry.type.includes("Polygon")) props.TYPE = "Polygon";
@@ -455,11 +483,11 @@ function showGeoJsonOnMap() {
         },
         pointToLayer: function (feature, latlng) {
           const serialNumber = (geoJsonCoordinateStore.findIndex(c => c.lat === latlng.lat && c.lng === latlng.lng)) + 1;
-          
+
           if (typeof addDetailedMarker === "function") {
-             const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1, feature);
-             if (marker) importedLayers.addLayer(marker);
-             return L.layerGroup(); 
+            const marker = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, serialNumber || 1, feature);
+            if (marker) importedLayers.addLayer(marker);
+            return L.layerGroup();
           }
 
           return L.circleMarker(latlng, {
@@ -471,7 +499,7 @@ function showGeoJsonOnMap() {
             fillOpacity: 1
           });
         },
-        style: function(feature) {
+        style: function (feature) {
           return {
             color: "#667eea",
             weight: 3,
@@ -481,7 +509,7 @@ function showGeoJsonOnMap() {
           };
         }
       });
-      
+
       // Fit bounds
       try {
         const bounds = geoLayer.getBounds();
@@ -491,11 +519,11 @@ function showGeoJsonOnMap() {
           const group = L.featureGroup(markers);
           map.fitBounds(group.getBounds(), { padding: [30, 30] });
         }
-      } catch(e) {
+      } catch (e) {
         console.error("Error fitting bounds:", e);
       }
     }
-    
+
     updateMapStats();
   }, 300);
 }
@@ -503,6 +531,7 @@ function showGeoJsonOnMap() {
 function clearGeoJsonData() {
   currentGeoJsonData = null;
   geoJsonCoordinateStore = [];
+  window.currentGeoJsonDataByName = {};
   jsonMappingState = { data: null, fileName: "", keys: [], selectedLat: "", selectedLng: "" };
 
   if (typeof clearMapMarkers === "function") clearMapMarkers();
@@ -532,4 +561,192 @@ function downloadGeoJsonResults() {
   }
   const format = document.getElementById("geoJsonExportFormat")?.value || "csv";
   handleGenericExport(format, geoJsonCoordinateStore, "geoJsonFile");
+}
+
+// ==================== Individual GeoJSON File Operations ====================
+
+function deleteIndividualGeoJsonByName(fileName) {
+  if (!window.currentGeoJsonDataByName || !window.currentGeoJsonDataByName[fileName]) {
+    return;
+  }
+
+  delete window.currentGeoJsonDataByName[fileName];
+
+  // If no more GeoJSON files, clear the backward-compatible reference
+  if (Object.keys(window.currentGeoJsonDataByName).length === 0) {
+    currentGeoJsonData = null;
+    geoJsonCoordinateStore = [];
+  } else {
+    // Update currentGeoJsonData to first remaining file for backward compatibility
+    const firstFileName = Object.keys(window.currentGeoJsonDataByName)[0];
+    currentGeoJsonData = window.currentGeoJsonDataByName[firstFileName];
+    geoJsonCoordinateStore = extractCoordinatesFromGeoJson(currentGeoJsonData) ||
+      extractCoordinatesFromFeature(currentGeoJsonData) || [];
+  }
+
+  if (typeof syncUploadUI === 'function') syncUploadUI();
+}
+
+function previewIndividualGeoJson(fileName) {
+  if (!window.currentGeoJsonDataByName || !window.currentGeoJsonDataByName[fileName]) {
+    alert("GeoJSON file not found");
+    return;
+  }
+
+  const geoJsonData = window.currentGeoJsonDataByName[fileName];
+  let coordinates = extractCoordinatesFromGeoJson(geoJsonData) ||
+    extractCoordinatesFromFeature(geoJsonData) || [];
+
+  if (!coordinates || coordinates.length === 0) {
+    alert("No extractable coordinates found in this GeoJSON file");
+    return;
+  }
+
+  // Discover property keys
+  const propertyKeys = new Set();
+  const geomTypes = new Set();
+
+  if (geoJsonData.type === "FeatureCollection") {
+    geoJsonData.features.forEach(feature => {
+      if (feature.properties) {
+        Object.keys(feature.properties).forEach(key => {
+          if (key !== 'ObjectID') propertyKeys.add(key);
+        });
+      }
+      if (feature.geometry) geomTypes.add(feature.geometry.type);
+    });
+  } else if (geoJsonData.type === "Feature") {
+    if (geoJsonData.properties) {
+      Object.keys(geoJsonData.properties).forEach(key => {
+        if (key !== 'ObjectID') propertyKeys.add(key);
+      });
+    }
+    if (geoJsonData.geometry) geomTypes.add(geoJsonData.geometry.type);
+  }
+
+  const sortedKeys = Array.from(propertyKeys).sort();
+  const displayCount = Math.min(coordinates.length, 10);
+
+  let html = `<div class="result-card">
+    <h3 style="color: #667eea; margin-bottom: 15px;">📄 ${fileName}</h3>
+    <div style="margin-bottom: 15px; padding: 12px; background: #f0f7ff; border-left: 3px solid #667eea; border-radius: 4px;">
+      <strong style="color: #667eea;">Geometry Types:</strong> ${Array.from(geomTypes).join(', ') || 'N/A'} | 
+      <strong style="color: #667eea;">Features:</strong> ${coordinates.length}
+    </div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Latitude</th>
+            <th>Longitude</th>
+            ${sortedKeys.slice(0, 3).map(k => `<th>${k}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${coordinates.slice(0, displayCount).map((c, i) => {
+    const feature = geoJsonData.type === "FeatureCollection" ?
+      geoJsonData.features.find(f => f.properties && f.properties.ObjectID === c.ObjectID) :
+      geoJsonData;
+    const props = feature?.properties || {};
+
+    return `
+              <tr>
+                <td>${i + 1}</td>
+                <td style="font-family: monospace;">${c.lat.toFixed(6)}</td>
+                <td style="font-family: monospace;">${c.lng.toFixed(6)}</td>
+                ${sortedKeys.slice(0, 3).map(k => `<td style="font-size: 0.85em;">${props[k] || '-'}</td>`).join('')}
+              </tr>
+            `;
+  }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${coordinates.length > displayCount ? `<p style="color: #718096; font-size: 0.85em; margin-top: 10px;">... and ${coordinates.length - displayCount} more features</p>` : ''}
+  </div>`;
+
+  document.getElementById("geoJsonResult").innerHTML = html;
+  showTab("results");
+}
+
+function showIndividualGeoJsonOnMap(fileName) {
+  // Try named lookup first, fall back to combined data
+  var geoJsonData = null;
+
+  if (window.currentGeoJsonDataByName && window.currentGeoJsonDataByName[fileName]) {
+    geoJsonData = window.currentGeoJsonDataByName[fileName];
+  } else if (currentGeoJsonData && currentGeoJsonData.features && currentGeoJsonData.features.length > 0) {
+    geoJsonData = currentGeoJsonData;
+    if (typeof showToast === 'function') showToast("Using combined GeoJSON data for " + fileName, "info");
+  } else {
+    if (typeof showToast === 'function') showToast('GeoJSON "' + fileName + '" not found', "error");
+    return;
+  }
+
+  if (!geoJsonData) {
+    if (typeof showToast === 'function') showToast("No GeoJSON data available for " + fileName, "error");
+    return;
+  }
+
+  // Switch to map tab
+  if (typeof showTab === 'function') showTab('map');
+
+  setTimeout(function () {
+    if (!map && typeof initMap === 'function') initMap();
+    else if (map && typeof map.invalidateSize === 'function') map.invalidateSize();
+
+    if (typeof clearMapMarkers === 'function') clearMapMarkers();
+
+    var key = 'geojson::' + fileName;
+    if (mapVisibleLayers && mapVisibleLayers[key] && map) {
+      try { map.removeLayer(mapVisibleLayers[key]); } catch (e) { }
+      delete mapVisibleLayers[key];
+    }
+
+    if (map && typeof L !== 'undefined') {
+      var renderer = L.canvas({ padding: 0.5 });
+
+      var geoLayer = L.geoJSON(geoJsonData, {
+        renderer: renderer,
+        onEachFeature: function (feature, layer) {
+          layer.feature = feature;
+          if (feature.properties) {
+            var props = { ...feature.properties };
+            props._geojson = fileName;
+            if (feature.geometry && feature.geometry.type) {
+              if (feature.geometry.type.indexOf("Polygon") !== -1) props.TYPE = "Polygon";
+              else if (feature.geometry.type.indexOf("Line") !== -1) props.TYPE = "Line";
+            }
+            if (typeof createPremiumPopupHTML === 'function') {
+              layer.bindPopup(createPremiumPopupHTML(null, null, props, null), { maxWidth: 350 });
+            }
+          }
+        },
+        style: function (feature) {
+          return { weight: 2, color: "#3498db", opacity: 0.8, fillColor: "#3498db", fillOpacity: 0.3 };
+        },
+        pointToLayer: function (feature, latlng) {
+          if (typeof addDetailedMarker === "function") {
+            var m = addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, 1, feature);
+            if (m) return m;
+          }
+          return L.circleMarker(latlng, { radius: 8, fillColor: "#3498db", color: "#ffffff", weight: 2, opacity: 1, fillOpacity: 1 });
+        }
+      });
+
+      mapVisibleLayers[key] = geoLayer;
+      geoLayer.addTo(map);
+
+      if (typeof geoLayer.getBounds === 'function') {
+        try {
+          var bounds = geoLayer.getBounds();
+          if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [30, 30] });
+          }
+        } catch (e) { }
+      }
+    }
+
+    if (typeof showToast === 'function') showToast("📍 " + fileName + " on map", "success");
+  }, 100);
 }

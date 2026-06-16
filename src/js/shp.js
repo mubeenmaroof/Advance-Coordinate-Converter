@@ -63,7 +63,7 @@ function handleShpUpload(event) {
 }
 
 async function handleShpFiles(files) {
-  const dropZone = document.getElementById("shpDropZone");
+  const dropZone = document.getElementById("cardShp");
   const shpResult = document.getElementById("shpResult");
   const clearBtnGroup = document.getElementById("shpClearBtnGroup");
 
@@ -198,6 +198,7 @@ async function handleShpFiles(files) {
         updateProcessingProgress(progress);
         showProcessingOverlay(`Processed ${processedCount}/${completeGroups.length} shapefiles...`, progress);
 
+
         console.log(`📦 Completed shapefile ${group.baseName}, features:`, collections.reduce((sum, c) => sum + (c.features ? c.features.length : 0), 0));
 
       } catch (err) {
@@ -220,20 +221,39 @@ async function handleShpFiles(files) {
     stopShpProgressPulse();
     stopShpWorkerTimeout();
     updateProcessingProgress(100);
+    
+    // Store individual shapefiles separately
+    if (!window.currentShpDataByName) {
+      window.currentShpDataByName = {};
+    }
+    
+    // Store each shapefile's features separately
+    completeGroups.forEach(group => {
+      const groupFeatures = allGeoJsonFeatures.filter(f => f.properties?._sourceFile === group.baseName + '.shp');
+      if (groupFeatures.length > 0) {
+        window.currentShpDataByName[group.baseName] = {
+          type: 'FeatureCollection',
+          features: groupFeatures,
+          _sourceFile: group.baseName + '.shp'
+        };
+      }
+    });
+    
+    // Keep combined data for backward compatibility
     currentShpData = combinedGeoJson;
     currentShpData._sourceFileName = `${completeGroups.length} shapefile(s)`;
+    currentShpData._completeGroups = completeGroups.map(g => g.baseName);
+    
     processShpData(combinedGeoJson);
     if (typeof syncUploadUI === 'function') syncUploadUI();
 
-    // Update UI
-    const dropZoneTitle = dropZone.querySelector('h3');
-    const dropZoneDesc = dropZone.querySelector('p');
-    if (dropZoneTitle) dropZoneTitle.innerText = `✅ ${completeGroups.length} Shapefile(s) Processed`;
-    if (dropZoneDesc) dropZoneDesc.innerText = `Combined ${allGeoJsonFeatures.length} features from ${completeGroups.map(g => g.baseName).join(', ')}`;
+    // Update UI (with null checks)
+    const shapefileNames = completeGroups.map(g => g.baseName).join(', ');
+    // Keep the card at its default state - don't update dropZone text
     if (document.getElementById("shpTopClearBtnGroup")) document.getElementById("shpTopClearBtnGroup").style.display = "block";
     if (document.getElementById("shpBottomActionBtnGroup")) document.getElementById("shpBottomActionBtnGroup").style.display = "block";
     hideProcessingOverlay();
-    showToast(`✓ ${completeGroups.length} shapefile(s) processed successfully (${allGeoJsonFeatures.length} features)`, "success");
+    showToast(`✓ Loaded: ${shapefileNames} (${allGeoJsonFeatures.length} features)`, "success");
 
   } catch (err) {
     console.error("❌ Error parsing Shapefile components:", err);
@@ -755,6 +775,7 @@ function showShpOnMap() {
 function clearShpData() {
   currentShpData = null;
   shpCoordinateStore = [];
+  window.currentShpDataByName = {};
 
   if (typeof clearMapMarkers === "function") clearMapMarkers();
   if (typeof syncUploadUI === "function") syncUploadUI();
@@ -779,9 +800,230 @@ function clearShpData() {
   const fileInput = document.getElementById("shpFile");
   if (fileInput) fileInput.value = "";
 }
+
+// ═════════════════════════════════════════════════════════════════════
+//  INDIVIDUAL SHAPEFILE OPERATIONS
+// ═════════════════════════════════════════════════════════════════════
+
+function showIndividualShapefileOnMap(shapefileName) {
+  // Try named lookup first, fall back to combined currentShpData
+  var shpData = null;
+  
+  if (window.currentShpDataByName && window.currentShpDataByName[shapefileName]) {
+    shpData = window.currentShpDataByName[shapefileName];
+  } else if (currentShpData && currentShpData.features) {
+    // Fallback: use combined data
+    shpData = currentShpData;
+    if (typeof showToast === 'function') {
+      showToast("Using combined shapefile data for " + shapefileName, "info");
+    }
+  } else {
+    if (typeof showToast === 'function') {
+      showToast('Shapefile "' + shapefileName + '" not found', "error");
+    }
+    return;
+  }
+  
+  if (!shpData || !shpData.features || shpData.features.length === 0) {
+    if (typeof showToast === 'function') {
+      showToast("No features found in " + shapefileName, "error");
+    }
+    return;
+  }
+  
+  // Switch to map tab and initialize if needed
+  if (typeof showTab === 'function') {
+    showTab('map');
+  }
+  
+  setTimeout(function() {
+    // Ensure map is initialized
+    if (!map && typeof initMap === 'function') initMap();
+    else if (map && typeof map.invalidateSize === 'function') map.invalidateSize();
+    
+    // Clear existing map layers (but not the base tile layer)
+    if (typeof clearMapMarkers === 'function') clearMapMarkers();
+    
+    // Remove any previously tracked layer for this shapefile
+    var key = 'shp::' + shapefileName;
+    if (mapVisibleLayers && mapVisibleLayers[key] && map) {
+      try { map.removeLayer(mapVisibleLayers[key]); } catch(e) {}
+      delete mapVisibleLayers[key];
+    }
+    
+    // Add to map if we have data and Leaflet is available
+    if (map && shpData && typeof L !== 'undefined') {
+      var renderer = L.canvas({ padding: 0.5 });
+      var pointIndex = 0;
+      
+      var geoLayer = L.geoJSON(shpData, {
+        renderer: renderer,
+        onEachFeature: function(feature, layer) {
+          layer.feature = feature;
+          if (feature.properties) {
+            var props = { ...feature.properties };
+            props._shapefile = shapefileName;
+            if (feature.geometry && feature.geometry.type) {
+              if (feature.geometry.type.indexOf("Polygon") !== -1) props.TYPE = "Polygon";
+              else if (feature.geometry.type.indexOf("Line") !== -1) props.TYPE = "Line";
+            }
+            if (typeof createPremiumPopupHTML === 'function') {
+              layer.bindPopup(createPremiumPopupHTML(null, null, props, null), { maxWidth: 350 });
+            }
+          }
+        },
+        style: function(feature) {
+          return { weight: 2, color: "#667eea", opacity: 0.8, fillColor: "#667eea", fillOpacity: 0.3 };
+        },
+        pointToLayer: function(feature, latlng) {
+          if (typeof addDetailedMarker === "function") {
+            pointIndex++;
+            return addDetailedMarker(latlng.lat, latlng.lng, feature.properties || {}, pointIndex, feature) || L.circleMarker(latlng, { radius: 8, fillColor: "#667eea", color: "#ffffff", weight: 2, opacity: 1, fillOpacity: 1 });
+          }
+          return L.circleMarker(latlng, { radius: 8, fillColor: "#667eea", color: "#ffffff", weight: 2, opacity: 1, fillOpacity: 1 });
+        }
+      });
+      
+      // Store reference for toggle cleanup and add to map
+      mapVisibleLayers[key] = geoLayer;
+      geoLayer.addTo(map);
+      
+      // Fit view to the data bounds
+      if (typeof geoLayer.getBounds === 'function') {
+        try {
+          var bounds = geoLayer.getBounds();
+          if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [30, 30] });
+          }
+        } catch(e) {
+          console.warn("Could not fit bounds:", e);
+        }
+      }
+    }
+    
+    if (typeof showToast === 'function') {
+      showToast("📍 " + shapefileName + " on map", "success");
+    }
+  }, 100);
+}
+
+function deleteIndividualShapefileByName(shapefileName) {
+  if (!window.currentShpDataByName || !window.currentShpDataByName[shapefileName]) {
+    showToast(`Shapefile "${shapefileName}" not found`, "error");
+    return;
+  }
+  
+  // Remove from map first
+  if (typeof mapRemoveFileFromMap === 'function') {
+    mapRemoveFileFromMap('shp', shapefileName + '.shp');
+  }
+  
+  delete window.currentShpDataByName[shapefileName];
+  
+  // Check if any shapefiles remain
+  const remainingCount = Object.keys(window.currentShpDataByName).length;
+  
+  if (remainingCount === 0) {
+    // All shapefiles deleted, clear everything
+    clearShpData();
+  } else {
+    // Rebuild combined data from remaining shapefiles
+    const allFeatures = [];
+    Object.values(window.currentShpDataByName).forEach(shpData => {
+      if (shpData.features) {
+        allFeatures.push(...shpData.features);
+      }
+    });
+    
+    window.currentShpData = {
+      type: 'FeatureCollection',
+      features: allFeatures,
+      _sourceFileName: `${remainingCount} shapefile(s)`
+    };
+    
+    // Reprocess and refresh UI
+    processShpData(window.currentShpData);
+    renderShpPreview();
+    showToast(`Deleted "${shapefileName}". ${remainingCount} shapefile(s) remaining.`, "info");
+  }
+  
+  // Ensure queue refreshes
+  if (typeof syncUploadUI === 'function') syncUploadUI();
+  if (typeof renderQueue === 'function') setTimeout(renderQueue, 100);
+}
+
+function previewIndividualShapefile(shapefileName) {
+  if (!window.currentShpDataByName || !window.currentShpDataByName[shapefileName]) {
+    showToast(`Shapefile "${shapefileName}" not found`, "error");
+    return;
+  }
+  
+  const shpData = window.currentShpDataByName[shapefileName];
+  const featureCount = shpData.features ? shpData.features.length : 0;
+  
+  // Build preview for this specific shapefile
+  const shpResult = document.getElementById("shpResult");
+  if (!shpResult) return;
+  
+  if (featureCount === 0) {
+    shpResult.innerHTML = `<p style='padding: 20px; text-align: center; color: #64748b;'>No features found in ${shapefileName}.</p>`;
+    return;
+  }
+
+  // Collect unique keys from this shapefile's features
+  const propertyKeys = new Set();
+  shpData.features.forEach(f => {
+    if (f.properties) {
+      Object.keys(f.properties).forEach(key => {
+        if (key !== '_sourceFile') propertyKeys.add(key);
+      });
+    }
+  });
+
+  const sortedKeys = Array.from(propertyKeys).sort();
+  const displayCount = Math.min(featureCount, 10);
+
+  let html = `
+    <div class="result">
+      <div style="margin-bottom: 15px;">
+        <h4 style="margin: 0; color: #28a745;">📦 ${shapefileName} Preview</h4>
+        <p style="margin: 5px 0; color: #666;">
+          Features: <b>${featureCount}</b> | Displaying: <b>First ${displayCount} records</b>
+        </p>
+      </div>
+
+      <div class="table-container" style="max-height: 400px; overflow: auto; border: 1px solid #eee; border-radius: 8px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="background: #28a745; color: white; padding: 10px; text-align: left;">#</th>
+              <th style="background: #28a745; color: white; padding: 10px; text-align: left;">Type</th>
+              ${sortedKeys.map(key => `<th style="background: #28a745; color: white; padding: 10px; text-align: left;">${key}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${shpData.features.slice(0, displayCount).map((f, i) => `
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">${i + 1}</td>
+                <td style="padding: 10px;"><span class="badge" style="background: #e9ecef; color: #495057;">${f.geometry?.type || 'Unknown'}</span></td>
+                ${sortedKeys.map(key => `<td style="padding: 10px;">${f.properties && f.properties[key] !== undefined ? f.properties[key] : ''}</td>`).join('')}
+              </tr>
+            `).join('')}
+            ${featureCount > displayCount ? `<tr><td colspan="${sortedKeys.length + 2}" style="text-align: center; padding: 15px; background: #f8f9fa; font-style: italic; color: #666;">Showing first ${displayCount} of ${featureCount} rows.</td></tr>` : ''}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  shpResult.innerHTML = html;
+}
+
 // expose
 window.handleShpUpload = handleShpUpload;
 window.handleShpFiles = handleShpFiles;
 window.showShpOnMap = showShpOnMap;
 window.clearShpData = clearShpData;
 window.downloadShpResults = downloadShpResults;
+window.deleteIndividualShapefileByName = deleteIndividualShapefileByName;
+window.showIndividualShapefileOnMap = showIndividualShapefileOnMap;
+window.previewIndividualShapefile = previewIndividualShapefile;
