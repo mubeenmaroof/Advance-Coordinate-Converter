@@ -524,8 +524,19 @@ function downloadShpResults() {
     return;
   }
 
-  const exportSelect = document.getElementById('shpExportFormat');
-  const format = exportSelect ? exportSelect.value : 'shp';
+  // Use pending conversion format as primary source (most reliable)
+  var format = null;
+  if (window._pendingConversionData && window._pendingConversionData.targetFormat) {
+    format = window._pendingConversionData.targetFormat;
+  }
+  
+  // Fallback: read from DOM dropdown if pending format is missing
+  if (!format) {
+    const exportSelect = document.getElementById('shpExportFormat');
+    format = exportSelect ? exportSelect.value : null;
+  }
+  
+  if (!format) format = 'shp';
 
   const selectedCategories = Array.from(document.querySelectorAll('input[name="shpExportCategory"]:checked')).map(input => input.value);
   let featureCollectionToExport = currentShpData;

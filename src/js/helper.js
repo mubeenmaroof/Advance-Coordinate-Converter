@@ -419,52 +419,186 @@ window._queueDelete = function (type, clearFnName) {
 window._pendingConversionData = { sourceType: null, selectedFileName: null };
 
 function getLoadedFilesInfo() {
+  var excelInput = document.getElementById("excelFile");
+  var geoInput = document.getElementById("geoJsonFile");
+  var kmlInput = document.getElementById("kmlFile");
+  var shpInput = document.getElementById("shpFile");
+  var gpxInput = document.getElementById("gpxFile");
+
   return {
-    excel: { count: Object.keys(window.currentExcelDataByName || {}).length, files: Object.keys(window.currentExcelDataByName || {}) },
-    geojson: { count: Object.keys(window.currentGeoJsonDataByName || {}).length, files: Object.keys(window.currentGeoJsonDataByName || {}) },
-    kml: { count: Object.keys(window.currentKmlDataByName || {}).length, files: Object.keys(window.currentKmlDataByName || {}) },
-    shp: { count: Object.keys(window.currentShpDataByName || {}).length, files: Object.keys(window.currentShpDataByName || {}) },
-    gpx: { count: Object.keys(window.currentGpxDataByName || {}).length, files: Object.keys(window.currentGpxDataByName || {}) }
+    excel: {
+      count: Math.max(Object.keys(window.currentExcelDataByName || {}).length, excelInput ? excelInput.files.length : 0),
+      files: Object.keys(window.currentExcelDataByName || {}).length > 0 ? Object.keys(window.currentExcelDataByName) : (excelInput ? Array.from(excelInput.files).map(f => f.name) : [])
+    },
+    geojson: {
+      count: Math.max(Object.keys(window.currentGeoJsonDataByName || {}).length, geoInput ? geoInput.files.length : 0),
+      files: Object.keys(window.currentGeoJsonDataByName || {}).length > 0 ? Object.keys(window.currentGeoJsonDataByName) : (geoInput ? Array.from(geoInput.files).map(f => f.name) : [])
+    },
+    kml: {
+      count: Math.max(Object.keys(window.currentKmlDataByName || {}).length, kmlInput ? kmlInput.files.length : 0),
+      files: Object.keys(window.currentKmlDataByName || {}).length > 0 ? Object.keys(window.currentKmlDataByName) : (kmlInput ? Array.from(kmlInput.files).map(f => f.name) : [])
+    },
+    shp: {
+      count: Math.max(Object.keys(window.currentShpDataByName || {}).length, shpInput ? shpInput.files.length / 4 : 0),
+      files: Object.keys(window.currentShpDataByName || {}).length > 0 ? Object.keys(window.currentShpDataByName).map(n => n + ".shp") : (shpInput ? Array.from(new Set(Array.from(shpInput.files).map(f => f.name.split('.').slice(0, -1).join('.')))) : [])
+    },
+    gpx: {
+      count: Math.max(Object.keys(window.currentGpxDataByName || {}).length, gpxInput ? gpxInput.files.length : 0),
+      files: Object.keys(window.currentGpxDataByName || {}).length > 0 ? Object.keys(window.currentGpxDataByName) : (gpxInput ? Array.from(gpxInput.files).map(f => f.name) : [])
+    }
   };
 }
 
-function showFileSelectionModal(sourceType, files) {
+function findFileStore(fileName) {
+  var stores = [
+    { type: "excel", store: window.currentExcelDataByName },
+    { type: "geojson", store: window.currentGeoJsonDataByName },
+    { type: "kml", store: window.currentKmlDataByName },
+    { type: "shp", store: window.currentShpDataByName },
+    { type: "gpx", store: window.currentGpxDataByName }
+  ];
+  for (var i = 0; i < stores.length; i++) {
+    var s = stores[i];
+    if (s.store && s.store[fileName]) return { type: s.type, store: s.store, data: s.store[fileName] };
+  }
+  // SHP fallback: keys are base names without .shp, check with extension stripped
+  var shpStore = window.currentShpDataByName;
+  if (shpStore) {
+    var base = fileName.replace(/\.shp$/i, '');
+    if (shpStore[base]) return { type: "shp", store: shpStore, data: shpStore[base] };
+  }
+  return null;
+}
+
+function showMultiTypeFileSelectionModal(multiFileTypes, targetFormat) {
   const modal = document.getElementById("fileSelectionModal");
   const listContainer = document.getElementById("fileSelectionList");
   if (!modal || !listContainer) return;
   listContainer.innerHTML = "";
+
+  var firstRadioValue = null;
+
+  multiFileTypes.forEach(entry => {
+    const typeLabel = _fileTypeLabels[entry.type]?.name || entry.type;
+    const section = document.createElement("div");
+    section.style.marginBottom = "16px";
+
+    const header = document.createElement("div");
+    header.style.fontWeight = "700";
+    header.style.color = "#334155";
+    header.style.marginBottom = "8px";
+    header.textContent = typeLabel;
+    section.appendChild(header);
+
+    entry.files.forEach(fileName => {
+      const radioValue = entry.type + ":" + fileName;
+      if (!firstRadioValue) firstRadioValue = radioValue;
+
+      const option = document.createElement("div");
+      option.style.cssText = "padding:10px 14px;margin-bottom:6px;background:#f8fafc;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:10px;";
+      const radio = document.createElement("input");
+      radio.type = "radio"; radio.name = "fileSelection"; radio.value = radioValue;
+      radio.style.cssText = "width:16px;height:16px;cursor:pointer;";
+      radio.addEventListener("change", () => { window._pendingConversionData.selectedFileName = radioValue; });
+      const label = document.createElement("label");
+      label.style.cssText = "flex:1;cursor:pointer;margin:0;font-size:13px;";
+      label.textContent = fileName;
+      label.addEventListener("click", () => { radio.checked = true; window._pendingConversionData.selectedFileName = radioValue; });
+      option.appendChild(radio); option.appendChild(label); section.appendChild(option);
+    });
+
+    listContainer.appendChild(section);
+  });
+
+  window._pendingConversionData = { sourceType: multiFileTypes[0].type, selectedFileName: firstRadioValue, targetFormat: targetFormat, multiFileTypes: multiFileTypes };
+  openModal("fileSelectionModal");
+}
+
+function showFileSelectionModal(sourceType, files, targetFormat) {
+  const modal = document.getElementById("fileSelectionModal");
+  const listContainer = document.getElementById("fileSelectionList");
+  if (!modal || !listContainer) return;
+  listContainer.innerHTML = "";
+  var firstValue = null;
   files.forEach(fileName => {
+    if (!firstValue) firstValue = fileName;
     const option = document.createElement("div");
     option.style.cssText = "padding:12px 16px;margin-bottom:8px;background:#f8fafc;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:12px;";
     const radio = document.createElement("input");
     radio.type = "radio"; radio.name = "fileSelection"; radio.value = fileName;
     radio.style.cssText = "width:18px;height:18px;cursor:pointer;";
-    if (!window._pendingConversionData.selectedFileName) { radio.checked = true; window._pendingConversionData.selectedFileName = fileName; }
     radio.addEventListener("change", () => { window._pendingConversionData.selectedFileName = fileName; });
     const label = document.createElement("label");
     label.style.cssText = "flex:1;cursor:pointer;margin:0;"; label.textContent = fileName;
     label.addEventListener("click", () => { radio.checked = true; window._pendingConversionData.selectedFileName = fileName; });
     option.appendChild(radio); option.appendChild(label); listContainer.appendChild(option);
   });
-  window._pendingConversionData.sourceType = sourceType;
+  window._pendingConversionData = { sourceType: sourceType, selectedFileName: firstValue, targetFormat: targetFormat };
   openModal("fileSelectionModal");
 }
 
 function proceedWithSelectedFile() {
-  var sourceType = window._pendingConversionData.sourceType;
-  var selectedFile = window._pendingConversionData.selectedFileName;
-  if (!sourceType || !selectedFile) { showToast("Please select a file to convert.", "warning"); return; }
+  var selected = window._pendingConversionData.selectedFileName || "";
+  var selectedFile = selected;
+  var typeFromRadio = null;
+  if (selected.includes(":")) {
+    var parts = selected.split(":");
+    typeFromRadio = parts[0];
+    selectedFile = parts.slice(1).join(":");
+  }
+  if (!selectedFile) { showToast("Please select a file to convert.", "warning"); return; }
   closeModal("fileSelectionModal");
-  var targetFormat = document.getElementById("targetFormatSelect")?.value;
+  var targetFormat = window._pendingConversionData.targetFormat || document.getElementById("targetFormatSelect")?.value;
   var setFormat = function(selectId, val) { var sel = document.getElementById(selectId); if (sel) sel.value = val; };
-  if (sourceType === "excel") {
-    window.excelCurrentFileName = selectedFile; window.excelData = window.currentExcelDataByName[selectedFile];
+
+  // Use the type encoded in the radio value (avoids store-lookup mismatches)
+  var found = null;
+  if (typeFromRadio) {
+    var storeMap = {
+      excel: window.currentExcelDataByName,
+      geojson: window.currentGeoJsonDataByName,
+      kml: window.currentKmlDataByName,
+      shp: window.currentShpDataByName,
+      gpx: window.currentGpxDataByName
+    };
+    var store = storeMap[typeFromRadio];
+    if (store && store[selectedFile]) {
+      found = { type: typeFromRadio, store: store, data: store[selectedFile] };
+    } else {
+      // SHP fallback: keys are base names without .shp
+      if (typeFromRadio === "shp" && store) {
+        var base = selectedFile.replace(/\.shp$/i, '');
+        if (store[base]) found = { type: "shp", store: store, data: store[base] };
+      }
+    }
+  }
+  if (!found) found = findFileStore(selectedFile);
+  if (!found) {
+    // Try legacy single-file globals as fallback
+    if (window.excelData && window.excelData.length > 0 && selectedFile === (document.getElementById("excelFile")?.files?.[0]?.name || "CSV/Excel Data")) {
+      setFormat("excelExportFormat", targetFormat);
+      if (typeof window.convertExcelData === "function") { window.convertExcelData(); setTimeout(function() { if (typeof window.downloadExcelResults === "function") window.downloadExcelResults(); }, 500); }
+      return;
+    }
+    showToast("File not found in loaded data: " + selectedFile, "error");
+    return;
+  }
+
+  window._pendingConversionData.sourceType = found.type;
+  var typeKey = found.type;
+
+  if (typeKey === "excel") {
+    window.excelCurrentFileName = selectedFile; window.excelData = found.data;
     setFormat("excelExportFormat", targetFormat);
     if (typeof window.convertExcelData === "function") { window.convertExcelData(); setTimeout(function() { if (typeof window.downloadExcelResults === "function") window.downloadExcelResults(); }, 500); }
-  } else if (sourceType === "geojson") { window.currentGeoJsonData = window.currentGeoJsonDataByName[selectedFile]; setFormat("geoJsonExportFormat", targetFormat); if (typeof window.downloadGeoJsonResults === "function") window.downloadGeoJsonResults(); }
-  else if (sourceType === "kml") { window.currentKmlData = window.currentKmlDataByName[selectedFile]; setFormat("kmlExportFormat", targetFormat); if (typeof window.downloadKmlResults === "function") window.downloadKmlResults(); }
-  else if (sourceType === "shp") { window.currentShpData = window.currentShpDataByName[selectedFile]; setFormat("shpExportFormatSelect", targetFormat); if (typeof window.downloadShpResults === "function") window.downloadShpResults(); }
-  else if (sourceType === "gpx") { window.currentGpxData = window.currentGpxDataByName[selectedFile]; setFormat("gpxExportFormat", targetFormat); if (typeof window.downloadGpxResults === "function") window.downloadGpxResults(); }
+  } else if (typeKey === "geojson") { window.currentGeoJsonData = found.data; setFormat("geoJsonExportFormat", targetFormat); if (typeof window.downloadGeoJsonResults === "function") window.downloadGeoJsonResults(); }
+  else if (typeKey === "kml") { window.currentKmlData = found.data; setFormat("kmlExportFormat", targetFormat); if (typeof window.downloadKmlResults === "function") window.downloadKmlResults(); }
+  else if (typeKey === "shp") { window.currentShpData = found.data; setFormat("shpExportFormat", targetFormat); if (typeof window.downloadShpResults === "function") window.downloadShpResults(); }
+  else if (typeKey === "gpx") { window.currentGpxData = found.data; setFormat("gpxExportFormat", targetFormat); if (typeof window.downloadGpxResults === "function") window.downloadGpxResults(); }
+  else {
+    // Unknown type fallback — never default to Excel
+    showToast("Could not determine file type for: " + selectedFile, "error");
+  }
 }
 
 function triggerConvertAndDownload() {
@@ -472,32 +606,48 @@ function triggerConvertAndDownload() {
   var filesInfo = getLoadedFilesInfo();
   var setFormat = function(selectId, val) { var sel = document.getElementById(selectId); if (sel) sel.value = val; };
 
-  function handleSingle(count, typeKey, dataName, dataObj, setterFnName, downloadFnName) {
-    if (count > 1) { showFileSelectionModal(typeKey, filesInfo[typeKey].files); return true; }
-    if (count === 1) {
-      var fn = filesInfo[typeKey].files[0];
-      if (typeKey === "excel") { window.excelCurrentFileName = fn; window.excelData = window.currentExcelDataByName[fn]; }
-      else if (dataObj) window[dataObj] = window[dataName][fn];
-      setFormat(setterFnName, targetFormat);
-      if (typeof window[downloadFnName] === "function") { if (typeKey === "excel") { window.convertExcelData(); setTimeout(function() { window.downloadExcelResults(); }, 500); } else { window[downloadFnName](); } }
-      return true;
+  // Collect all files across all types to always show selection modal when anything is loaded
+  var allAvailableFiles = [];
+  var typeConfig = {
+    excel:      { dataName: null, dataObj: null, setterFnName: "excelExportFormat", downloadFnName: "downloadExcelResults", isExcel: true },
+    geojson:    { dataName: "currentGeoJsonData", dataObj: "currentGeoJsonDataByName", setterFnName: "geoJsonExportFormat", downloadFnName: "downloadGeoJsonResults", isExcel: false },
+    kml:        { dataName: "currentKmlData", dataObj: "currentKmlDataByName", setterFnName: "kmlExportFormat", downloadFnName: "downloadKmlResults", isExcel: false },
+    shp:        { dataName: "currentShpData", dataObj: "currentShpDataByName", setterFnName: "shpExportFormat", downloadFnName: "downloadShpResults", isExcel: false },
+    gpx:        { dataName: "currentGpxData", dataObj: "currentGpxDataByName", setterFnName: "gpxExportFormat", downloadFnName: "downloadGpxResults", isExcel: false }
+  };
+
+  var hasAnyFiles = false;
+  Object.keys(typeConfig).forEach(function(typeKey) {
+    if (filesInfo[typeKey].count > 0) {
+      hasAnyFiles = true;
+      allAvailableFiles.push({ type: typeKey, files: filesInfo[typeKey].files, config: typeConfig[typeKey] });
     }
-    return false;
+  });
+
+  if (!hasAnyFiles) {
+    if (window.markers && window.markers.length > 0) { triggerMapExport(targetFormat); return; }
+    showToast("Please upload a file or add coordinates first.", "warning");
+    return;
   }
 
-  if (handleSingle(filesInfo.excel.count, "excel", null, null, "excelExportFormat", "downloadExcelResults")) return;
-  if (handleSingle(filesInfo.geojson.count, "geojson", "currentGeoJsonData", "currentGeoJsonDataByName", "geoJsonExportFormat", "downloadGeoJsonResults")) return;
-  if (handleSingle(filesInfo.kml.count, "kml", "currentKmlData", "currentKmlDataByName", "kmlExportFormat", "downloadKmlResults")) return;
-  if (handleSingle(filesInfo.shp.count, "shp", "currentShpData", "currentShpDataByName", "shpExportFormatSelect", "downloadShpResults")) return;
-  if (handleSingle(filesInfo.gpx.count, "gpx", "currentGpxData", "currentGpxDataByName", "gpxExportFormat", "downloadGpxResults")) return;
+  if (allAvailableFiles.length > 1 || (allAvailableFiles.length === 1 && allAvailableFiles[0].files.length > 1)) {
+    if (allAvailableFiles.length === 1 && allAvailableFiles[0].files.length > 1) {
+      showFileSelectionModal(allAvailableFiles[0].type, allAvailableFiles[0].files, targetFormat);
+    } else {
+      showMultiTypeFileSelectionModal(allAvailableFiles, targetFormat);
+    }
+    return;
+  }
 
-  if (window.excelData && window.excelData.length > 0) { setFormat("excelExportFormat", targetFormat); if (typeof window.convertExcelData === "function") { window.convertExcelData(); setTimeout(function() { if (typeof window.downloadExcelResults === "function") window.downloadExcelResults(); }, 500); } }
-  else if (window.currentGeoJsonData) { setFormat("geoJsonExportFormat", targetFormat); if (typeof window.downloadGeoJsonResults === "function") window.downloadGeoJsonResults(); }
-  else if (window.currentKmlData) { setFormat("kmlExportFormat", targetFormat); if (typeof window.downloadKmlResults === "function") window.downloadKmlResults(); }
-  else if (window.currentShpData) { setFormat("shpExportFormatSelect", targetFormat); if (typeof window.downloadShpResults === "function") window.downloadShpResults(); }
-  else if (window.currentGpxData) { setFormat("gpxExportFormat", targetFormat); if (typeof window.downloadGpxResults === "function") window.downloadGpxResults(); }
-  else if (window.markers && window.markers.length > 0) { triggerMapExport(targetFormat); }
-  else { showToast("Please upload a file or add coordinates first.", "warning"); }
+  // Exactly one file type with exactly one file — process directly
+  var entry = allAvailableFiles[0];
+  var fn = entry.files[0];
+  var typeKey = entry.type;
+  var cfg = entry.config;
+  if (typeKey === "excel") { window.excelCurrentFileName = fn; window.excelData = window.currentExcelDataByName[fn]; }
+  else if (cfg.dataObj) window[cfg.dataObj] = window[cfg.dataName][fn];
+  setFormat(cfg.setterFnName, targetFormat);
+  if (typeof window[cfg.downloadFnName] === "function") { if (cfg.isExcel) { window.convertExcelData(); setTimeout(function() { window.downloadExcelResults(); }, 500); } else { window[cfg.downloadFnName](); } }
 }
 
 function triggerMapExport(format) {
