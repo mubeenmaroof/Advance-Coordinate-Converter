@@ -651,7 +651,7 @@
                     <div id="columnSelection"></div>
                     <div id="excelResult"></div>
                     <div class="button-group preview-action-row" id="excelClearBtnGroup">
-                        <button class="tool-action-btn danger" onclick="clearExcelData(); closeModal('previewModal');">Clear Data</button>
+                        <button class="tool-action-btn danger" onclick="clearExcelData(); closeModal('previewModal');">🗑 Clear Data</button>
                     </div>
                 </div>
 
@@ -659,7 +659,7 @@
                 <div id="geojsonPreviewWrapper" class="preview-section" style="display:none;">
                     <div id="geoJsonResult"></div>
                     <div class="button-group preview-action-row" id="geoJsonClearBtnGroup">
-                        <button class="tool-action-btn danger" onclick="clearGeoJsonData(); closeModal('previewModal');">Clear Data</button>
+                        <button class="tool-action-btn danger" onclick="clearGeoJsonData(); closeModal('previewModal');">🗑 Clear Data</button>
                     </div>
                 </div>
 
@@ -667,21 +667,23 @@
                 <div id="kmlPreviewWrapper" class="preview-section" style="display:none;">
                     <div id="kmlResult"></div>
                     <div class="button-group preview-action-row" id="kmlClearBtnGroup">
-                        <button class="tool-action-btn danger" onclick="clearKmlData(); closeModal('previewModal');">Clear Data</button>
+                        <button class="tool-action-btn danger" onclick="clearKmlData(); closeModal('previewModal');">🗑 Clear Data</button>
                     </div>
                 </div>
 
                 <!-- SHP preview -->
                 <div id="shpPreviewWrapper" class="preview-section" style="display:none;">
                     <div id="shpResult"></div>
-                    <div class="button-group preview-action-row preview-action-row--space-between" id="shpTopClearBtnGroup">
-                        <button class="tool-action-btn danger" onclick="clearShpData(); closeModal('previewModal');">Clear Data</button>
-                        <div id="shpBottomActionBtnGroup" class="preview-action-row preview-action-row--wrap">
-                            <label class="preview-export-label">SHP Export Format:</label>
-                            <div id="shpExportFormatPlaceholder"></div>
-                            <button class="tool-action-btn primary" onclick="downloadShpResults()">📥 Download</button>
-                            <button class="tool-action-btn success" onclick="showShpOnMap(); closeModal('previewModal');">🗺️ Show Map</button>
+                    <div id="shpBottomActionBtnGroup" class="preview-action-row preview-action-row--wrap" style="margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #28a745; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                        <label style="font-weight: 700; font-size: 0.9em; color: #28a745;">Export Format:</label>
+                        <div id="shpExportFormatPlaceholder"></div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="tool-action-btn primary" onclick="downloadShpResults()">📥 Download Results</button>
+                            <button class="tool-action-btn success" onclick="showShpOnMap(); closeModal('previewModal');">📍 Show on Map</button>
                         </div>
+                    </div>
+                    <div class="button-group preview-action-row" id="shpClearBtnGroup" style="margin-top: 12px;">
+                        <button class="tool-action-btn danger" onclick="clearShpData(); closeModal('previewModal');">🗑 Clear Data</button>
                     </div>
                 </div>
 
@@ -689,7 +691,7 @@
                 <div id="gpxPreviewWrapper" class="preview-section" style="display:none;">
                     <div id="gpxResult"></div>
                     <div class="button-group preview-action-row" id="gpxClearBtnGroup">
-                        <button class="tool-action-btn danger" onclick="clearGpxData(); closeModal('previewModal');">Clear Data</button>
+                        <button class="tool-action-btn danger" onclick="clearGpxData(); closeModal('previewModal');">🗑 Clear Data</button>
                     </div>
                 </div>
 

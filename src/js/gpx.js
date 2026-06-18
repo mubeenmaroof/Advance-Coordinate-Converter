@@ -282,7 +282,6 @@ function renderGpxSuccessUI(fileName, count) {
           </tbody>
         </table>
       </div>
-      
       ${count > displayCount ? `
         <p style="font-size: 0.8em; color: #64748b; margin-top: 10px; font-style: italic; padding-left: 5px;">
           * Showing first ${displayCount} of ${count} features. Use "Show on Map" to see all spatial data.
@@ -312,7 +311,7 @@ function showGpxOnMap() {
     }
     return;
   }
-  
+  closeModal('previewModal');
   showTab('map');
   
   setTimeout(() => {

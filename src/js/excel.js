@@ -257,14 +257,12 @@ function displayColumnSelection(headers, sheetName = null) {
       detectedColumns.length +
       " coordinate column(s)</p>";
   }
-  html += '<div class="button-group" style="margin-bottom: 15px;">';
-  html +=
-    '<button class="btn btn-success" onclick="selectAllColumns()">✓ Select All</button>';
-  html +=
-    '<button class="btn btn-secondary" onclick="deselectAllColumns()">✗ Deselect All</button>';
-  html +=
-    '<button class="btn" onclick="selectDetectedColumns()">✓ Select Auto-Detected Only</button>';
-  html += "</div>";
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">';
+  html += '  <span style="font-weight:700;font-size:0.85em;color:#475569;margin-right:4px;">Quick Select:</span>';
+  html += '  <button class="tool-action-btn secondary" onclick="selectAllColumns()" style="font-size:0.78em;padding:5px 14px;border-radius:6px;">☑ Select All</button>';
+  html += '  <button class="tool-action-btn secondary" onclick="deselectAllColumns()" style="font-size:0.78em;padding:5px 14px;border-radius:6px;">☐ Deselect All</button>';
+  html += '  <button class="tool-action-btn primary" onclick="selectDetectedColumns()" style="font-size:0.78em;padding:5px 14px;border-radius:6px;">⚡ Auto-Detect</button>';
+  html += '</div>';
   html += '<div class="checkbox-group">';
   headers.forEach((header, index) => {
     const isDetected = detectedColumns.some((col) => col.index === index);
@@ -295,7 +293,7 @@ function displayColumnSelection(headers, sheetName = null) {
   html += '    <div style="display: flex; gap: 10px; flex-wrap: wrap;">';
   html += '        <button class="tool-action-btn primary" onclick="convertExcelData()">🔄 Convert Data</button>';
   html += '        <button class="tool-action-btn secondary" onclick="downloadExcelResults()">📥 Download Results</button>';
-  html += '        <button class="tool-action-btn success" onclick="showExcelOnMap()">📍 Show on Map</button>';
+  html += '        <button class="tool-action-btn success" onclick="showExcelOnMap(); closeModal(\'previewModal\');">📍 Show on Map</button>';
   html += '    </div>';
   html += '</div>';
   selectionDiv.innerHTML = html;
@@ -445,7 +443,7 @@ function displayConvertedData(data, convertedColumns) {
       </div>
       
       <div style="margin-top: 20px; display: flex; gap: 10px;">
-         <button class="btn btn-primary" onclick="showExcelOnMap()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;">
+         <button class="btn btn-primary" onclick="showExcelOnMap(); closeModal(\'previewModal\');" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;">
            <span>🗺️</span> View on Map
          </button>
       </div>

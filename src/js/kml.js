@@ -355,8 +355,7 @@ function renderKmlSuccessUI(fileName, count) {
         </tbody>
       </table>
     </div>
-
-    <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #28a745; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: center;">
+   <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #28a745; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: center;">
       <label style="font-weight: 700; font-size: 0.9em; color: #28a745;">Export Format:</label>
       ${getExportOptionsHTML(isKmz ? 'kmz' : 'kml', 'kmlExportFormat')}
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -574,6 +573,7 @@ function showKmlOnMap() {
     return;
   }
 
+  closeModal('previewModal');
   showTab('map');
 
   setTimeout(() => {

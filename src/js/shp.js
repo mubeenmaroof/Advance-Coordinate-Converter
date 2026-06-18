@@ -652,6 +652,7 @@ function showShpOnMap() {
     return;
   }
 
+  closeModal('previewModal');
   showTab('map');
 
   const totalFeatures = shpCoordinateStore.length;

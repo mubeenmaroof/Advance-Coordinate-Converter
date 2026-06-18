@@ -369,8 +369,7 @@ function renderJsonSuccessUI(fileName, format, count) {
           * Showing first ${displayCount} of ${count} features. Use "Show on Map" to see all spatial data.
         </p>
       ` : ''}
-
-      <div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #667eea; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+ <div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px dashed #667eea; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
         <label style="font-weight: 700; font-size: 0.9em; color: #667eea;">Export Format:</label>
         ${getExportOptionsHTML(fileName.endsWith('.json') ? 'json' : 'geojson', 'geoJsonExportFormat')}
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -450,6 +449,7 @@ function showGeoJsonOnMap() {
     return;
   }
 
+  closeModal('previewModal');
   showTab('map');
 
   setTimeout(() => {
