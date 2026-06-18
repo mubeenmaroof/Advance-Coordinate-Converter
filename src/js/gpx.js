@@ -9,7 +9,7 @@ if (!window.currentGpxDataByName) {
 }
 
 function handleGpxUpload(event) {
-  if (window.checkExistingData && window.checkExistingData()) {
+  if (window.checkExistingData && window.checkExistingData('gpx')) {
     event.target.value = '';
     return;
   }

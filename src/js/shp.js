@@ -52,7 +52,7 @@ function handleShpWorkerError(errorMessage) {
 }
 
 function handleShpUpload(event) {
-  if (window.checkExistingData && window.checkExistingData()) {
+  if (window.checkExistingData && window.checkExistingData('shp')) {
     event.target.value = '';
     return;
   }

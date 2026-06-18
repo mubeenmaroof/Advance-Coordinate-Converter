@@ -7,7 +7,7 @@ if (!window.currentExcelDataByName) {
 
 function handleFileUpload(event) {
   console.log("📁 Excel file upload triggered", event);
-  if (window.checkExistingData && window.checkExistingData()) {
+  if (window.checkExistingData && window.checkExistingData('excel')) {
     event.target.value = '';
     return;
   }

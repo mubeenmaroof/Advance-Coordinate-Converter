@@ -209,22 +209,47 @@ function generateExportFileName(fileInputIds, toolName, extension) {
   return `${baseName}_${dateStr}.${extension}`;
 }
 
-function checkExistingData() {
-  const loaded = [];
-  if (window.excelData && window.excelData.length > 0) loaded.push('Excel/CSV');
-  if (window.currentGeoJsonData) loaded.push('GeoJSON');
-  if (window.currentKmlData) loaded.push('KML/KMZ');
-  if (window.currentShpData) loaded.push('Shapefile');
-  if (window.currentGpxData) loaded.push('GPX');
-
-  if (loaded.length > 0) {
-    const msg = '⚠️ Data already loaded: ' + loaded.join(', ') + '. Please click the "Clear" button in the active section before uploading new data.';
-    if (typeof showToast === 'function') {
-      showToast(msg, 'error');
-    } else {
-      alert(msg);
+function checkExistingData(fileType) {
+  var type = fileType ? String(fileType).toLowerCase() : '';
+  
+  if (!type) {
+    // Legacy: block only if same legacy global matches current by-name storage
+    if (window.excelData && window.excelData.length > 0 && (!window.currentExcelDataByName || Object.keys(window.currentExcelDataByName).length === 0)) return true;
+    if (!window.currentGeoJsonDataByName || Object.keys(window.currentGeoJsonDataByName).length === 0) {
+      if (window.currentGeoJsonData) return true;
     }
-    return true;
+    if (!window.currentKmlDataByName || Object.keys(window.currentKmlDataByName).length === 0) {
+      if (window.currentKmlData) return true;
+    }
+    if (!window.currentShpDataByName || Object.keys(window.currentShpDataByName).length === 0) {
+      if (window.currentShpData) return true;
+    }
+    if (!window.currentGpxDataByName || Object.keys(window.currentGpxDataByName).length === 0) {
+      if (window.currentGpxData) return true;
+    }
+    return false;
+  }
+
+  // Type-specific check: only block if that specific type already has data
+  if (type === 'excel' || type === 'csv' || type === 'xlsx' || type === 'xls') {
+    if (window.excelData && window.excelData.length > 0) return true;
+    if (window.currentExcelDataByName && Object.keys(window.currentExcelDataByName).length > 0) return true;
+  }
+  if (type === 'geojson' || type === 'json') {
+    if (window.currentGeoJsonData) return true;
+    if (window.currentGeoJsonDataByName && Object.keys(window.currentGeoJsonDataByName).length > 0) return true;
+  }
+  if (type === 'kml' || type === 'kmz') {
+    if (window.currentKmlData) return true;
+    if (window.currentKmlDataByName && Object.keys(window.currentKmlDataByName).length > 0) return true;
+  }
+  if (type === 'shp' || type === 'shapefile') {
+    if (window.currentShpData) return true;
+    if (window.currentShpDataByName && Object.keys(window.currentShpDataByName).length > 0) return true;
+  }
+  if (type === 'gpx') {
+    if (window.currentGpxData) return true;
+    if (window.currentGpxDataByName && Object.keys(window.currentGpxDataByName).length > 0) return true;
   }
   return false;
 }

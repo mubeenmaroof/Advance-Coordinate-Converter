@@ -9,6 +9,10 @@ var kmlCoordinateStore = [];
 
 function handleKmlUpload(event) {
   console.log("📁 KML file upload triggered", event);
+  if (window.checkExistingData && window.checkExistingData('kml')) {
+    event.target.value = '';
+    return;
+  }
   const files = event.target.files;
 
   if (!files || files.length === 0) return;

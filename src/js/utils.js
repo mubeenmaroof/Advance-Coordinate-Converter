@@ -16,13 +16,38 @@ function validateFileSize(file, maxSizeMB) {
 }
 
 // Check if existing data should prevent new uploads
-function checkExistingData() {
-  // Check if any file data is currently loaded
-  if (window.excelData && window.excelData.length > 0) return true;
-  if (window.currentGeoJsonData) return true;
-  if (window.currentKmlData) return true;
-  if (window.currentShpData) return true;
-  if (window.currentGpxData) return true;
+// If fileType is provided, only block uploads of that same type
+function checkExistingData(fileType) {
+  if (!fileType) {
+    // Legacy: block only if same legacy global is populated
+    if (window.excelData && window.excelData.length > 0) return true;
+    if (window.currentGeoJsonData) return true;
+    if (window.currentKmlData) return true;
+    if (window.currentShpData) return true;
+    if (window.currentGpxData) return true;
+    return false;
+  }
+  var type = String(fileType).toLowerCase();
+  if (type === 'excel' || type === 'csv' || type === 'xlsx' || type === 'xls') {
+    if (window.excelData && window.excelData.length > 0) return true;
+    if (window.currentExcelDataByName && Object.keys(window.currentExcelDataByName).length > 0) return true;
+  }
+  if (type === 'geojson' || type === 'json') {
+    if (window.currentGeoJsonData) return true;
+    if (window.currentGeoJsonDataByName && Object.keys(window.currentGeoJsonDataByName).length > 0) return true;
+  }
+  if (type === 'kml' || type === 'kmz') {
+    if (window.currentKmlData) return true;
+    if (window.currentKmlDataByName && Object.keys(window.currentKmlDataByName).length > 0) return true;
+  }
+  if (type === 'shp' || type === 'shapefile') {
+    if (window.currentShpData) return true;
+    if (window.currentShpDataByName && Object.keys(window.currentShpDataByName).length > 0) return true;
+  }
+  if (type === 'gpx') {
+    if (window.currentGpxData) return true;
+    if (window.currentGpxDataByName && Object.keys(window.currentGpxDataByName).length > 0) return true;
+  }
   return false;
 }
 window.checkExistingData = checkExistingData;
