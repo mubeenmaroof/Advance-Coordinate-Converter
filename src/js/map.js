@@ -103,20 +103,13 @@ function initMap() {
           },
         },
         polyline: false,
+        circle: false,
         rectangle: {
           shapeOptions: {
             color: shapeColors[currentShapeColorIndex],
             weight: 3,
             opacity: 0.8,
             fillOpacity: 0.3,
-          },
-        },
-        circle: {
-          shapeOptions: {
-            color: shapeColors[currentShapeColorIndex],
-            weight: 3,
-            opacity: 0.8,
-            fillOpacity: 0.2,
           },
         },
         marker: false,
@@ -497,7 +490,6 @@ function initMap() {
         let shapeCounts = {
           polygon: 0,
           rectangle: 0,
-          circle: 0,
           other: 0,
         };
 
@@ -507,8 +499,6 @@ function initMap() {
               shapeCounts.polygon++;
             } else if (layer instanceof L.Rectangle) {
               shapeCounts.rectangle++;
-            } else if (layer instanceof L.Circle) {
-              shapeCounts.circle++;
             } else {
               shapeCounts.other++;
             }
@@ -519,7 +509,6 @@ function initMap() {
         let summary = [];
         if (shapeCounts.polygon > 0) summary.push(`${shapeCounts.polygon} polygon${shapeCounts.polygon > 1 ? 's' : ''}`);
         if (shapeCounts.rectangle > 0) summary.push(`${shapeCounts.rectangle} rectangle${shapeCounts.rectangle > 1 ? 's' : ''}`);
-        if (shapeCounts.circle > 0) summary.push(`${shapeCounts.circle} circle${shapeCounts.circle > 1 ? 's' : ''}`);
         if (shapeCounts.other > 0) summary.push(`${shapeCounts.other} other`);
 
         const summaryText = summary.length > 0 ? summary.join(', ') : 'shape';
@@ -639,7 +628,7 @@ function updateDrawControlColors() {
 function showDrawnShapesInfo() {
   if (drawnShapesInfo.length === 0) {
     showToast(
-      "No shapes drawn yet. Draw a polygon, rectangle, or circle!",
+      "No shapes drawn yet. Draw a polygon or rectangle!",
       "info",
     );
     return;
@@ -731,20 +720,7 @@ function filterPointsByDrawing(layer) {
   let isInsideFunction = null;
   let selectionGeoJSON = null;
 
-  if (layer instanceof L.Circle) {
-    const center = layer.getLatLng();
-    const radius = layer.getRadius();
-    const centerPoint = turf.point([center.lng, center.lat]);
-    selectionGeoJSON = turf.circle(centerPoint, radius / 1000, { units: 'kilometers' });
-
-    isInsideFunction = (l) => {
-      if (!l.getLatLng) return false;
-      const p = l.getLatLng();
-      const markerPoint = turf.point([p.lng, p.lat]);
-      const distance = turf.distance(centerPoint, markerPoint, { units: "meters" });
-      return distance <= radius;
-    };
-  } else if (layer instanceof L.Polygon || layer instanceof L.Rectangle || layer instanceof L.Polyline) {
+  if (layer instanceof L.Polygon || layer instanceof L.Rectangle || layer instanceof L.Polyline) {
     try {
       selectionGeoJSON = layer.toGeoJSON();
       isInsideFunction = (l) => {
