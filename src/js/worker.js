@@ -541,15 +541,13 @@ self.onmessage = function(e) {
         }
 
         if (result && result.isTransferable && result.binary) {
-            let buffer = null;
             if (result.binary instanceof ArrayBuffer) {
-                buffer = result.binary;
-            } else if (result.binary.buffer instanceof ArrayBuffer) {
-                buffer = result.binary.buffer;
-            }
-
-            if (buffer) {
-                self.postMessage({ type: 'complete', result }, [buffer]);
+                // Transfer the ArrayBuffer directly
+                self.postMessage({ type: 'complete', result }, [result.binary]);
+            } else if (result.binary instanceof Uint8Array) {
+                // For Uint8Array, create a copy to avoid neutering the original
+                const copy = new Uint8Array(result.binary);
+                self.postMessage({ type: 'complete', result: { ...result, binary: copy } }, [copy.buffer]);
             } else {
                 self.postMessage({ type: 'complete', result });
             }
